@@ -139,6 +139,110 @@ def login():
         return jsonify({"message": "Credenciales incorrectas o cuenta no verificada"}), 401
 
 # =========================
+# AGREGAR INGRESO
+# =========================
+@app.route("/add-income", methods=["POST"])
+def add_income():
+    data = request.json
+    email = data.get("email")
+    monto = data.get("monto")
+    fecha = data.get("fecha")
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    # Obtener id del usuario
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+
+    usuario_id = user[0]
+
+    cursor.execute("""
+        INSERT INTO ingresos (usuario_id, monto, fecha)
+        VALUES (?, ?, ?)
+    """, (usuario_id, monto, fecha))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Ingreso agregado correctamente"}), 201
+
+
+# =========================
+# AGREGAR GASTO
+# =========================
+@app.route("/add-expense", methods=["POST"])
+def add_expense():
+    data = request.json
+    email = data.get("email")
+    tipo = data.get("tipo")
+    monto = data.get("monto")
+    fecha = data.get("fecha")
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+
+    usuario_id = user[0]
+
+    cursor.execute("""
+        INSERT INTO gastos (usuario_id, tipo, monto, fecha)
+        VALUES (?, ?, ?, ?)
+    """, (usuario_id, tipo, monto, fecha))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Gasto agregado correctamente"}), 201
+
+
+# =========================
+# CONSULTAR BALANCE
+# =========================
+@app.route("/balance", methods=["POST"])
+def balance():
+    data = request.json
+    email = data.get("email")
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+
+    usuario_id = user[0]
+
+    # Sumar ingresos
+    cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (usuario_id,))
+    total_ingresos = cursor.fetchone()[0] or 0
+
+    # Sumar gastos
+    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (usuario_id,))
+    total_gastos = cursor.fetchone()[0] or 0
+
+    conn.close()
+
+    return jsonify({
+        "ingresos": total_ingresos,
+        "gastos": total_gastos,
+        "balance": total_ingresos - total_gastos
+    }), 200
+
+# =========================
 # INICIO SERVIDOR
 # =========================
 

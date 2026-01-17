@@ -5,7 +5,233 @@
     <title>FinCSDash</title>
 </head>
 <body>
-    <h1>Bienvenido a FinCSDash</h1>
-    <p>Control básico de finanzas personales</p>
+
+<h1>FinCSDash</h1>
+
+<!-- ======================
+     ESTADO DE SESIÓN
+====================== -->
+<p id="estadoSesion"></p>
+
+<!-- ======================
+     LOGIN
+====================== -->
+<div id="view-login">
+    <h2>Login</h2>
+    <input type="email" id="loginEmail" placeholder="Email"><br><br>
+    <input type="password" id="loginPassword" placeholder="Contraseña"><br><br>
+    <button onclick="login()">Ingresar</button><br><br>
+    <button onclick="mostrarVista('register')">Registrarse</button>
+    <p id="loginResult"></p>
+</div>
+
+<!-- ======================
+     REGISTRO
+====================== -->
+<div id="view-register" style="display:none;">
+    <h2>Registro</h2>
+    <input type="email" id="registerEmail" placeholder="Email"><br><br>
+    <input type="password" id="registerPassword" placeholder="Contraseña"><br><br>
+    <button onclick="register()">Registrar</button><br><br>
+    <button onclick="mostrarVista('login')">Volver</button>
+    <p id="registerResult"></p>
+</div>
+
+<!-- ======================
+     VERIFICACIÓN
+====================== -->
+<div id="view-verify" style="display:none;">
+    <h2>Verificar cuenta</h2>
+    <input type="email" id="verifyEmail" placeholder="Email"><br><br>
+    <input type="text" id="verifyCode" placeholder="Código"><br><br>
+    <button onclick="verify()">Verificar</button>
+    <p id="verifyResult"></p>
+</div>
+
+<!-- ======================
+     FINANZAS (PROTEGIDA)
+====================== -->
+<div id="view-finance" style="display:none;">
+    <h2>Finanzas</h2>
+    <p>Bienvenido <b id="usuarioLabel"></b></p>
+
+    <button onclick="logout()">Cerrar sesión</button>
+
+    <hr>
+
+    <!-- INGRESO -->
+    <h3>Agregar ingreso</h3>
+    <input type="number" id="incomeMonto" placeholder="Monto"><br><br>
+    <input type="date" id="incomeFecha"><br><br>
+    <button onclick="agregarIngreso()">Agregar ingreso</button>
+    <p id="incomeResult"></p>
+
+    <hr>
+
+    <!-- GASTO -->
+    <h3>Agregar gasto</h3>
+    <input type="text" id="expenseTipo" placeholder="Tipo"><br><br>
+    <input type="number" id="expenseMonto" placeholder="Monto"><br><br>
+    <input type="date" id="expenseFecha"><br><br>
+    <button onclick="agregarGasto()">Agregar gasto</button>
+    <p id="expenseResult"></p>
+
+    <hr>
+
+    <!-- BALANCE -->
+    <h3>Balance</h3>
+    <button onclick="consultarBalance()">Consultar balance</button>
+    <p id="balanceResult"></p>
+</div>
+
+<script>
+// ======================
+// SESIÓN
+// ======================
+let usuarioActual = null;
+
+// ======================
+// NAVEGACIÓN SPA
+// ======================
+function mostrarVista(vista) {
+    ["login","register","verify","finance"].forEach(v =>
+        document.getElementById("view-" + v).style.display = "none"
+    );
+
+    // Protección de finanzas
+    if (vista === "finance" && !usuarioActual) {
+        document.getElementById("view-login").style.display = "block";
+        return;
+    }
+
+    document.getElementById("view-" + vista).style.display = "block";
+}
+
+// ======================
+// REGISTRO
+// ======================
+function register() {
+    fetch("http://127.0.0.1:5000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: document.getElementById("registerEmail").value,
+            password: document.getElementById("registerPassword").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("registerResult").innerText = data.message;
+        if (data.message.includes("Revisa tu correo")) {
+            mostrarVista("verify");
+        }
+    });
+}
+
+// ======================
+// VERIFICAR
+// ======================
+function verify() {
+    fetch("http://127.0.0.1:5000/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: document.getElementById("verifyEmail").value,
+            codigo: document.getElementById("verifyCode").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("verifyResult").innerText = data.message;
+        if (data.message.includes("verificada")) {
+            mostrarVista("login");
+        }
+    });
+}
+
+// ======================
+// LOGIN
+// ======================
+function login() {
+    fetch("http://127.0.0.1:5000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: document.getElementById("loginEmail").value,
+            password: document.getElementById("loginPassword").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("loginResult").innerText = data.message;
+        if (data.message === "Login exitoso") {
+            usuarioActual = document.getElementById("loginEmail").value;
+            document.getElementById("usuarioLabel").innerText = usuarioActual;
+            mostrarVista("finance");
+        }
+    });
+}
+
+// ======================
+// LOGOUT
+// ======================
+function logout() {
+    usuarioActual = null;
+    document.getElementById("estadoSesion").innerText = "Sesión cerrada";
+    mostrarVista("login");
+}
+
+// ======================
+// FINANZAS
+// ======================
+function agregarIngreso() {
+    fetch("http://127.0.0.1:5000/add-income", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: usuarioActual,
+            monto: document.getElementById("incomeMonto").value,
+            fecha: document.getElementById("incomeFecha").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("incomeResult").innerText = data.message;
+    });
+}
+
+function agregarGasto() {
+    fetch("http://127.0.0.1:5000/add-expense", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: usuarioActual,
+            tipo: document.getElementById("expenseTipo").value,
+            monto: document.getElementById("expenseMonto").value,
+            fecha: document.getElementById("expenseFecha").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("expenseResult").innerText = data.message;
+    });
+}
+
+function consultarBalance() {
+    fetch("http://127.0.0.1:5000/balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: usuarioActual })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("balanceResult").innerText =
+            "Ingresos: " + data.ingresos +
+            " | Gastos: " + data.gastos +
+            " | Balance: " + data.balance;
+    });
+}
+</script>
+
 </body>
 </html>
