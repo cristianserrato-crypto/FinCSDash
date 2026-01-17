@@ -1,69 +1,55 @@
-# Importamos Flask para crear el servidor web
-# request para recibir datos del cliente
-# jsonify para devolver respuestas en formato JSON
-from flask import Flask, request, jsonify
-from flask_cors import CORS  # Permite conexión desde el frontend
-import sqlite3
-from database import conectar_db, crear_tablas
+"""
+FinCSDash - Prueba controlada de envío de correo con Gmail API
+
+OBJETIVO:
+- Verificar que Python puede enviar correos usando Gmail API
+- NO usamos todavía registro, login ni base de datos
+"""
+
+# =========================
+# IMPORTACIONES
+# =========================
+
+# Flask solo para mantener la estructura del proyecto
+from flask import Flask
+
+# Importamos la función que envía correos usando Gmail API
+from gmail_service import enviar_correo
+
+
+# =========================
+# CREAR APP FLASK
+# =========================
 
 # Creamos la aplicación Flask
 app = Flask(__name__)
-CORS(app)  # Habilita CORS para toda la app
-
-# Crear tablas al iniciar la app
-crear_tablas()
-
-# Ruta para registrar usuarios
-@app.route("/register", methods=["POST"])
-def register():
-    data = request.json
-    email = data.get("email")
-    password = data.get("password")
-
-    try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "INSERT INTO usuarios (email, password) VALUES (?, ?)",
-            (email, password)
-        )
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({"message": "Usuario registrado correctamente"}), 201
-
-    except sqlite3.IntegrityError:
-        return jsonify({"message": "El usuario ya existe"}), 400
 
 
-# Definimos una ruta llamada /login
-# Solo acepta peticiones POST (envío de datos)
+# =========================
+# PRUEBA CONTROLADA GMAIL API
+# =========================
 
-@app.route("/login", methods=["POST"])
-def login():
-    # Obtenemos los datos enviados en formato JSON
-    data = request.json
-    # Extraemos el email y la contraseña del JSON
-    email = data.get("email")
-    password = data.get("password")
+def prueba_envio_correo():
+    """
+    Envía un correo de prueba a la cuenta FinCSDash.
+    Si esto funciona, Gmail API está correctamente configurada.
+    """
 
-    conn = conectar_db()
-    cursor = conn.cursor()
-    
-    cursor.execute(
-        "SELECT * FROM usuarios WHERE email = ? AND password = ?",
-        (email, password)
+    enviar_correo(
+        destinatario="fincsdash@gmail.com",
+        asunto="Prueba Gmail API - FinCSDash",
+        mensaje="Si ves este correo, la integración con Gmail API funciona correctamente."
     )
-    user = cursor.fetchone()
-    conn.close()
 
-    if user:
-        return jsonify({"message": "Login exitoso"}), 200
-    else:
-        return jsonify({"message": "Credenciales incorrectas"}), 401
 
+# =========================
+# PUNTO DE ENTRADA
+# =========================
 
 if __name__ == "__main__":
+    # Ejecutamos la prueba SOLO UNA VEZ al iniciar
+    prueba_envio_correo()
+
+    # Iniciamos el servidor Flask (aunque no tenga rutas aún)
     app.run(debug=True)
+

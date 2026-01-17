@@ -13,9 +13,10 @@ def crear_tablas():
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            codigo_verificacion TEXT,
+            activo INTEGER DEFAULT 0
         )
     """)
-
     conn.commit()
     conn.close()
