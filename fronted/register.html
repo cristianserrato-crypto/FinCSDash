@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro - FinCSDash</title>
+</head>
+<body>
+
+    <h2>Registro de usuario</h2>
+
+    <!-- Formulario de registro -->
+    <form id="registerForm">
+        <label>Email:</label><br>
+        <input type="email" id="email" required><br><br>
+
+        <label>Contraseña:</label><br>
+        <input type="password" id="password" required><br><br>
+
+        <button type="submit">Registrarse</button>
+    </form>
+
+    <!-- Mensaje del backend -->
+    <p id="resultado"></p>
+
+    <script>
+        // Capturamos el evento submit
+        document.getElementById("registerForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+
+            // Enviamos los datos al backend
+            fetch("http://127.0.0.1:5000/register", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    email: document.getElementById("email").value,
+                    password: document.getElementById("password").value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("resultado").innerText = data.message;
+            });
+        });
+    </script>
+
+</body>
+</html>
