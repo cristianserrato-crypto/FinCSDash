@@ -4,58 +4,73 @@
     <meta charset="UTF-8">
     <title>FinCSDash</title>
 
+    <!-- Estilos -->
     <link rel="stylesheet" href="css/styles.css">
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <script src="js/auth.js" defer></script>
-    <script src="js/app.js" defer></script>
-    <script src="js/finance.js" defer></script>
-</head>
+    <!-- Google Identity -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 
+    <!-- Lógica -->
+    <script src="js/app.js" defer></script>
+</head>
 <body>
 
-<h1>FinCSDash</h1>
+<header>
+    <h1>FinCSDash</h1>
+</header>
+
+<main>
 
 <!-- LOGIN -->
-<div id="view-login">
+<section id="login-view">
     <h2>Login</h2>
-    <input type="email" id="loginEmail" placeholder="Email"><br><br>
-    <input type="password" id="loginPassword" placeholder="Contraseña"><br><br>
-    <button onclick="login()">Ingresar</button><br><br>
-    <hr>
-    <button onclick="loginGoogle()">Continuar con Google</button>
-    <button onclick="mostrarVista('register')">Registrarse</button>
-    <p id="loginResult"></p>
-</div>
+
+    <input type="email" id="loginEmail" placeholder="Email">
+    <input type="password" id="loginPassword" placeholder="Contraseña">
+
+    <button onclick="login()">Ingresar</button>
+
+    <div id="googleBtn"></div>
+
+    <p id="loginMsg"></p>
+
+    <button onclick="showRegister()">Registrarse</button>
+</section>
 
 <!-- REGISTRO -->
-<div id="view-register" style="display:none;">
+<section id="register-view" style="display:none;">
     <h2>Registro</h2>
-    <input type="email" id="registerEmail" placeholder="Email"><br><br>
-    <input type="password" id="registerPassword" placeholder="Contraseña"><br><br>
-    <button onclick="register()">Registrar</button><br><br>
-    <button onclick="mostrarVista('login')">Volver</button>
-    <p id="registerResult"></p>
-</div>
 
-<!-- VERIFICAR -->
-<div id="view-verify" style="display:none;">
+    <input type="email" id="registerEmail" placeholder="Email">
+    <input type="password" id="registerPassword" placeholder="Contraseña">
+
+    <button onclick="register()">Registrar</button>
+
+    <p id="registerMsg"></p>
+
+    <button onclick="showLogin()">Volver</button>
+</section>
+
+<!-- VERIFICACIÓN -->
+<section id="verify-view" style="display:none;">
     <h2>Verificar cuenta</h2>
-    <input type="email" id="verifyEmail" placeholder="Email"><br><br>
-    <input type="text" id="verifyCode" placeholder="Código"><br><br>
-    <button onclick="verify()">Verificar</button>
-    <p id="verifyResult"></p>
-</div>
 
-<!-- FINANZAS -->
-<div id="view-finance" style="display:none;">
-    <h2>Finanzas</h2>
-    <p>Bienvenido <b id="usuarioLabel"></b></p>
+    <input type="email" id="verifyEmail" placeholder="Email">
+    <input type="text" id="verifyCode" placeholder="Código">
+
+    <button onclick="verify()">Verificar</button>
+
+    <p id="verifyMsg"></p>
+</section>
+
+<!-- DASHBOARD -->
+<section id="dashboard-view" style="display:none;">
+    <h2>Dashboard</h2>
+    <p>Bienvenido <b id="userEmail"></b></p>
     <button onclick="logout()">Cerrar sesión</button>
-</div>
-<script src="js/app.js" defer></script>
-<script src="js/auth.js" defer></script>
-<script src="js/finance.js" defer></script>
+</section>
+
+</main>
 
 </body>
 </html>
