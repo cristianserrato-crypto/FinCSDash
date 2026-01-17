@@ -1,11 +1,24 @@
+"""
+database.py
+Manejo de la base de datos SQLite para FinCSDash
+"""
+
 import sqlite3
 
-# Conexión a la base de datos (se crea si no existe)
-def conectar_db():
-    return sqlite3.connect("fincsdash.db")
+DB_NAME = "fincsdash.db"
 
-# Crear tabla de usuarios
+def conectar_db():
+    """
+    Conecta con la base de datos SQLite
+    """
+    return sqlite3.connect(DB_NAME)
+
+
 def crear_tablas():
+    """
+    Crea la tabla de usuarios si no existe
+    Incluye campos para verificación por correo
+    """
     conn = conectar_db()
     cursor = conn.cursor()
 
@@ -15,8 +28,9 @@ def crear_tablas():
             email TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             codigo_verificacion TEXT,
-            activo INTEGER DEFAULT 0
+            verificado INTEGER DEFAULT 0
         )
     """)
+
     conn.commit()
     conn.close()
