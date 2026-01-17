@@ -1,0 +1,79 @@
+/* ======================
+   ESTILOS GENERALES
+====================== */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    text-align: center;
+    background: #2c3e50;
+    color: white;
+    margin: 0;
+    padding: 15px;
+}
+
+h2 {
+    margin-top: 0;
+}
+
+/* ======================
+   CONTENEDOR PRINCIPAL
+====================== */
+#view-login,
+#view-register,
+#view-verify,
+#view-finance {
+    background: white;
+    max-width: 400px;
+    margin: 30px auto;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* ======================
+   INPUTS Y BOTONES
+====================== */
+input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+button:hover {
+    background: #2980b9;
+}
+
+/* ======================
+   MENSAJES
+====================== */
+p {
+    text-align: center;
+    font-size: 14px;
+}
+
+/* ======================
+   DASHBOARD
+====================== */
+canvas {
+    display: block;
+    margin: 20px auto;
+}
