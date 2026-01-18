@@ -1,6 +1,6 @@
-const API = "http://127.0.0.1:5000";
-// Cuando subas el backend a la nube, cambia la linea de arriba por la URL que te den, ejemplo:
-// const API = "https://fincsdash-backend.onrender.com";
+const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://127.0.0.1:5000"
+    : "https://fincsdash-backend.onrender.com";
 
 let currentUser = null;
 let usuarioActual = null;
