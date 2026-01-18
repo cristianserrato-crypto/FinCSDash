@@ -14,6 +14,12 @@ def crear_tablas():
     conn = conectar_db()
     cursor = conn.cursor()
 
+    # ⚠️ BORRAR TABLAS ANTERIORES (PARA PRUEBAS)
+    # cursor.execute("DROP TABLE IF EXISTS ingresos")
+    # cursor.execute("DROP TABLE IF EXISTS gastos")
+    # cursor.execute("DROP TABLE IF EXISTS categorias")
+    # cursor.execute("DROP TABLE IF EXISTS usuarios")
+
     # Tabla usuarios
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -47,6 +53,21 @@ def crear_tablas():
             FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)
+
+    # Tabla categorias
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER DEFAULT 0,
+            nombre TEXT NOT NULL,
+            UNIQUE(usuario_id, nombre)
+        )
+    """)
+
+    # Insertar categorías predefinidas
+    categorias_default = ["Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
+    for cat in categorias_default:
+        cursor.execute("INSERT OR IGNORE INTO categorias (usuario_id, nombre) VALUES (0, ?)", (cat,))
 
     # 👉 COMMIT ANTES DE CERRAR
     conn.commit()
