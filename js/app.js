@@ -1,7 +1,11 @@
+// Define la dirección del servidor (Backend).
+// Si el navegador dice que estamos en "localhost" o "127.0.0.1" (tu PC), usa el puerto 5000 local.
+// Si no, asume que estamos en internet y usa la dirección de Render.
 const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://127.0.0.1:5000"
     : "https://fincsdash-backend.onrender.com";
 
+// Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
 let usuarioActual = null;
 let currentMovements = []; // Para guardar los datos y poder ordenarlos
@@ -12,8 +16,12 @@ let myChart = null;        // Variable global para el gráfico
    ESTILOS (INYECCIÓN)
 ====================== */
 // Cambiar fondo a blanco y botones a gris
+// Este evento se ejecuta cuando el HTML termina de cargarse
 document.addEventListener("DOMContentLoaded", () => {
+    // Crea una etiqueta <style> nueva
     const style = document.createElement('style');
+    // Escribe reglas CSS dentro de esa etiqueta.
+    // Esto se hace aquí para agregar estilos avanzados dinámicamente sin ensuciar el archivo CSS principal.
     style.innerHTML = `
         :root {
             --primary: #4361ee;
@@ -110,12 +118,16 @@ document.addEventListener("DOMContentLoaded", () => {
             100% { transform: rotate(360deg); }
         }
     `;
+    // Agrega los estilos al encabezado del documento
     document.head.appendChild(style);
 
     // INYECTAR LIBRERÍA CHART.JS (Corrección para gráficos)
+    // Verifica si ya existe el script de gráficos, si no, lo crea
     if (!document.querySelector('script[src*="chart.js"]')) {
         const script = document.createElement('script');
+        // URL de la librería Chart.js
         script.src = "https://cdn.jsdelivr.net/npm/chart.js";
+        // Cuando termine de cargar el script, intenta dibujar el gráfico si hay datos
         script.onload = () => {
             if (currentMovements.length > 0) renderChart(currentMovements);
         };
@@ -123,8 +135,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // INYECTAR ESTRUCTURA DEL DASHBOARD (Para asegurar que se vean los elementos)
+    // Busca el elemento con ID "dashboard-view"
     const dashboard = document.getElementById("dashboard-view");
     if (dashboard) {
+        // Reemplaza el contenido HTML interno con todo el diseño del panel de control
         dashboard.innerHTML = `
             <div class="dashboard-container">
                 <!-- Encabezado -->
@@ -220,17 +234,22 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
         `;
         // Fecha por defecto hoy
+        // Obtiene la fecha actual en formato ISO (YYYY-MM-DD)
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById("expenseDate");
+        // Si existe el campo de fecha, le pone la fecha de hoy
         if(dateInput) dateInput.value = today;
     }
 
     // VERIFICAR SESIÓN AL CARGAR (CORRECCIÓN F5)
+    // Busca si hay un token guardado en el navegador (localStorage)
     const storedToken = localStorage.getItem("token");
     const storedEmail = localStorage.getItem("email");
+    // Si hay token y email, muestra el dashboard directamente
     if (storedToken && storedEmail) {
         showDashboard(storedEmail);
     } else {
+        // Si no, muestra el login
         showLogin();
     }
 });
@@ -238,29 +257,36 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ======================
    VISTAS
 ====================== */
+// Función para mostrar la pantalla de Login
 function showLogin() {
     hideAll();
     document.getElementById("login-view").style.display = "block";
 }
 
+// Función para mostrar la pantalla de Registro
 function showRegister() {
     hideAll();
     document.getElementById("register-view").style.display = "block";
 }
 
+// Función para mostrar la pantalla de Verificación
 function showVerify() {
     hideAll();
     document.getElementById("verify-view").style.display = "block";
 }
 
+// Función para mostrar el Dashboard principal
 function showDashboard(email) {
     hideAll();
     document.getElementById("dashboard-view").style.display = "block";
+    // Pone el email del usuario en el texto de bienvenida
     document.getElementById("userEmail").innerText = email;
+    // Carga las categorías y movimientos desde el servidor
     loadCategories();
     loadMovements();
 }
 
+// Función auxiliar para ocultar TODAS las secciones primero
 function hideAll() {
     document.querySelectorAll("section").forEach(s => s.style.display = "none");
 }
@@ -268,21 +294,27 @@ function hideAll() {
 /* ======================
    LOGIN
 ====================== */
+// Función que se llama al dar clic en "Ingresar"
 function login() {
+    // Hace una petición POST al servidor (API)
     fetch(`${API}/login`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
+        // Envía los datos del formulario convertidos a texto JSON
         body: JSON.stringify({
             email: document.getElementById("loginEmail").value,
             password: document.getElementById("loginPassword").value
         })
     })
-    .then(res => res.json())
+    .then(res => res.json()) // Convierte la respuesta del servidor a JSON
     .then(data => {
+        // Muestra el mensaje que respondió el servidor
         const msg = document.getElementById("loginMsg");
         if(msg) msg.innerText = data.message;
         
+        // Si el login fue exitoso
         if (data.message === "Login exitoso") {
+            // Guarda el token de seguridad en el navegador
             localStorage.setItem("token", data.token);
             currentUser = document.getElementById("loginEmail").value;
             localStorage.setItem("email", currentUser); // Guardar email para F5
@@ -294,9 +326,11 @@ function login() {
 /* ======================
    MOVIMIENTOS (TABLA)
 ====================== */
+// Función para cargar la lista de ingresos y gastos
 function loadMovements(month = null, year = null) {
+    // Obtiene el token guardado
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) return; // Si no hay token, no hace nada
 
     // Mostrar spinner en la tabla antes de cargar
     const tbody = document.getElementById("movementsTableBody");
@@ -309,11 +343,13 @@ function loadMovements(month = null, year = null) {
             </tr>`;
     }
 
+    // Construye la URL. Si hay mes y año, los agrega como filtros
     let url = `${API}/movements`;
     if (month && year) {
         url += `?month=${month}&year=${year}`;
     }
 
+    // Pide los datos al servidor enviando el token de autorización
     fetch(url, {
         headers: { "Authorization": "Bearer " + token }
     })
@@ -325,15 +361,18 @@ function loadMovements(month = null, year = null) {
     });
 }
 
+// Función para dibujar la tabla HTML con los datos recibidos
 function renderMovements(data) {
     const tbody = document.getElementById("movementsTableBody");
     if (!tbody) return;
 
     tbody.innerHTML = ""; // Limpiar tabla actual
     
+    // Variables para calcular totales
     let totalIngresos = 0;
     let totalGastos = 0;
 
+    // Recorre cada movimiento
     data.forEach(mov => {
         if (mov.tipo === "Ingreso") {
             totalIngresos += parseFloat(mov.monto);
@@ -345,7 +384,10 @@ function renderMovements(data) {
         const [year, month, day] = mov.fecha.split("-");
         const formattedDate = `${day}/${month}/${year}`;
 
+        // Crea una nueva fila (tr) para la tabla
         const row = document.createElement("tr");
+        
+        // Define colores: verde para ingreso, rojo para gasto
         const color = mov.tipo === "Ingreso" ? "green" : "red";
         const signo = mov.tipo === "Ingreso" ? "+" : "-";
         
@@ -374,11 +416,13 @@ function renderMovements(data) {
 /* ======================
    GRÁFICO (CHART.JS)
 ====================== */
+// Función para dibujar el gráfico de barras
 function renderChart(data) {
     const ctx = document.getElementById('expenseChart');
     if (!ctx) return; // Si no existe el canvas, no hacemos nada
 
     // 1. Agrupar por categoría (Ingresos y Gastos)
+    // Crea un objeto donde suma los montos por cada categoría
     const montosPorCat = {};
     data.forEach(mov => {
         const cat = mov.categoria;
@@ -386,12 +430,13 @@ function renderChart(data) {
         montosPorCat[cat] = (montosPorCat[cat] || 0) + monto;
     });
 
-    // Convertir a array para ordenar de mayor a menor
+    // Convertir ese objeto a una lista (array) para poder ordenarla
     const sortedData = Object.keys(montosPorCat).map(cat => ({
         cat: cat,
         amount: montosPorCat[cat]
     }));
 
+    // Ordenar de mayor a menor monto
     sortedData.sort((a, b) => b.amount - a.amount);
 
     const labels = sortedData.map(item => item.cat);
@@ -408,6 +453,7 @@ function renderChart(data) {
 
     // 3. Crear nuevo gráfico
     if (typeof Chart !== 'undefined') {
+        // Usa la librería Chart.js para crear el gráfico visual
         myChart = new Chart(ctx, {
             type: 'bar', // Puedes cambiar a 'pie' o 'doughnut' si prefieres
             data: {
@@ -431,10 +477,12 @@ function renderChart(data) {
     }
 }
 
+// Función para ordenar la tabla al hacer clic en el encabezado
 function sortTable(column) {
     sortAsc = !sortAsc; // Invertir orden
     
     currentMovements.sort((a, b) => {
+        // Compara números o textos según la columna
         let valA = column === 'monto' ? parseFloat(a[column]) : a[column].toString().toLowerCase();
         let valB = column === 'monto' ? parseFloat(b[column]) : b[column].toString().toLowerCase();
 
@@ -446,6 +494,7 @@ function sortTable(column) {
     renderMovements(currentMovements);
 }
 
+// Función que se ejecuta cuando cambias el filtro de mes
 function filterMovements() {
     const input = document.getElementById("monthFilter");
     if (!input || !input.value) return loadMovements(); // Cargar todo si está vacío
@@ -455,13 +504,16 @@ function filterMovements() {
     loadMovements(month, year);
 }
 
+// Función para borrar un movimiento
 function deleteMovement(id, tipo) {
+    // Pregunta confirmación al usuario
     if (!confirm("¿Estás seguro de eliminar este movimiento?")) return;
 
     const token = localStorage.getItem("token");
     // Determinamos si es gasto o ingreso para llamar al endpoint correcto
     const endpoint = tipo === "Ingreso" ? "/delete-income" : "/delete-expense";
 
+    // Envía la orden de borrado al servidor (DELETE)
     fetch(`${API}${endpoint}/${id}`, {
         method: "DELETE",
         headers: {
@@ -478,6 +530,7 @@ function deleteMovement(id, tipo) {
 /* ======================
    EXPORTAR A CSV
 ====================== */
+// Función para descargar los datos en Excel (CSV)
 function exportToCSV() {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -501,6 +554,7 @@ function exportToCSV() {
         if (!data || data.length === 0) return alert("No hay datos para exportar");
 
         // Encabezados del CSV
+        // Construye el contenido del archivo texto línea por línea
         let csv = "Fecha,Tipo,Categoría,Monto\n";
         data.forEach(d => {
             // Protegemos la categoría por si tiene comas
@@ -509,6 +563,7 @@ function exportToCSV() {
         });
 
         // Crear archivo blob con BOM (\uFEFF) para que Excel reconozca tildes
+        // Crea un enlace invisible y le hace clic automáticamente para descargar
         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
@@ -520,6 +575,7 @@ function exportToCSV() {
 /* ======================
    EXPORTAR A PDF
 ====================== */
+// Función para descargar reporte en PDF
 function exportToPDF() {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -532,6 +588,7 @@ function exportToPDF() {
         url += `?month=${month}&year=${year}`;
     }
 
+    // Pide el PDF al servidor. La respuesta es un 'blob' (archivo binario)
     fetch(url, {
         headers: { "Authorization": "Bearer " + token }
     })
@@ -551,6 +608,7 @@ function exportToPDF() {
 /* ======================
    AGREGAR GASTO
 ====================== */
+// Función para registrar un nuevo gasto
 function addExpense() {
     const token = localStorage.getItem("token");
     
@@ -564,6 +622,7 @@ function addExpense() {
         return alert("Por favor completa todos los campos (Categoría, Monto y Fecha)");
     }
 
+    // Envía los datos al servidor (POST)
     fetch(`${API}/add-expense`, {
         method: "POST",
         headers: {
@@ -592,6 +651,7 @@ function addExpense() {
 /* ======================
    AGREGAR INGRESO
 ====================== */
+// Función para registrar un nuevo ingreso
 function addIncome() {
     const token = localStorage.getItem("token");
     const monto = document.getElementById("expenseAmount").value;
@@ -626,6 +686,7 @@ function addIncome() {
 /* ======================
    REGISTRO
 ====================== */
+// Función para crear una cuenta nueva
 function register() {
     const email = document.getElementById("registerEmail").value;
     const password = document.getElementById("registerPassword").value;
@@ -654,6 +715,7 @@ function register() {
 /* ======================
    VERIFICAR
 ====================== */
+// Función para validar el código de verificación
 function verify() {
     fetch(`${API}/verify`, {
         method: "POST",
@@ -677,6 +739,7 @@ function verify() {
 /* ======================
    LOGOUT
 ====================== */
+// Función para cerrar sesión
 function logout() {
     currentUser = null;
     localStorage.removeItem("token");
@@ -687,12 +750,15 @@ function logout() {
 /* ======================
    GOOGLE LOGIN
 ====================== */
+// Configuración inicial de Google al cargar la página
 window.onload = () => {
+    // Inicializa la librería de Google con tu ID de cliente
     google.accounts.id.initialize({
         client_id: "741392813029-8iavkp2iqcntpb1m4d16h8t02c028naf.apps.googleusercontent.com",
         callback: handleGoogle
     });
 
+    // Dibuja el botón de Google en el div correspondiente
     const googleBtn = document.getElementById("googleBtn");
     if (googleBtn) {
         google.accounts.id.renderButton(
@@ -702,6 +768,7 @@ window.onload = () => {
     }
 };
 
+// Función que maneja la respuesta de Google
 function handleGoogle(response) {
     fetch(`${API}/google-login`, {
         method: "POST",
@@ -722,6 +789,7 @@ function handleGoogle(response) {
 /* ======================
    CATEGORÍAS
 ====================== */
+// Función para cargar las categorías disponibles desde el servidor
 function loadCategories() {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -730,6 +798,7 @@ function loadCategories() {
         headers: { "Authorization": "Bearer " + token }
     })
     .then(res => res.json())
+    // Llena el menú desplegable (select) con las opciones recibidas
     .then(categorias => {
         const select = document.getElementById("categoriaSelect");
         if (select) {
@@ -744,6 +813,7 @@ function loadCategories() {
     });
 }
 
+// Función para crear una nueva categoría personalizada
 function addCategory() {
     const token = localStorage.getItem("token");
     const input = document.getElementById("newCategoryInput");

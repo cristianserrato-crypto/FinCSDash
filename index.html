@@ -1,75 +1,102 @@
+<!-- Define que este es un documento HTML5 moderno -->
 <!DOCTYPE html>
+<!-- Inicio de la etiqueta HTML, configurada en idioma español -->
 <html lang="es">
 <head>
+    <!-- Permite caracteres especiales como tildes y ñ -->
     <meta charset="UTF-8">
+    <!-- Asegura que la página se vea bien en celulares (ajusta el ancho a la pantalla) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- El título que aparece en la pestaña del navegador -->
     <title>FinCSDash</title>
 
     <!-- Estilos -->
+    <!-- Conecta este archivo con la hoja de estilos CSS para que se vea bonito -->
     <link rel="stylesheet" href="css/styles.css">
 
     <!-- Google Identity -->
+    <!-- Carga la librería de Google para poder iniciar sesión con Gmail -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Carga tu archivo de autenticación (si tienes lógica extra ahí) -->
     <script src="js/auth.js" defer></script>
 
 
     <!-- Lógica -->
+    <!-- Carga el archivo principal de JavaScript que controla toda la aplicación -->
+    <!-- 'defer' significa que espera a que el HTML cargue antes de ejecutarse -->
     <script src="js/app.js" defer></script>
 </head>
 <body>
 
+<!-- Encabezado de la página (barra superior) -->
 <header>
     <h1>FinCSDash</h1>
 </header>
 
+<!-- Contenido principal de la página -->
 <main>
 
 <!-- LOGIN -->
+<!-- Sección de inicio de sesión. Tiene un ID para poder ocultarla o mostrarla con JS -->
 <section id="login-view">
     <h2>Login</h2>
 
+    <!-- Campo de texto para escribir el email -->
     <input type="email" id="loginEmail" placeholder="Email">
+    <!-- Campo para la contraseña (se ven puntitos en lugar de letras) -->
     <input type="password" id="loginPassword" placeholder="Contraseña">
 
+    <!-- Botón que al hacer clic ejecuta la función 'login()' de JavaScript -->
     <button onclick="login()">Ingresar</button>
 
+    <!-- Contenedor vacío donde Google dibujará su botón de "Iniciar sesión" -->
     <div id="googleBtn"></div>
 
+    <!-- Párrafo vacío para mostrar mensajes de error o éxito -->
     <p id="loginMsg"></p>
 
+    <!-- Botón para cambiar a la vista de registro -->
     <button onclick="showRegister()">Registrarse</button>
 </section>
 
 <!-- REGISTRO -->
+<!-- Sección de registro. 'style="display:none;"' significa que inicia oculta -->
 <section id="register-view" style="display:none;">
     <h2>Registro</h2>
 
     <input type="email" id="registerEmail" placeholder="Email">
     <input type="password" id="registerPassword" placeholder="Contraseña">
 
+    <!-- Ejecuta la función 'register()' al hacer clic -->
     <button onclick="register()">Registrar</button>
 
     <p id="registerMsg"></p>
 
+    <!-- Botón para volver a la pantalla de login -->
     <button onclick="showLogin()">Volver</button>
 </section>
 
 <!-- VERIFICACIÓN -->
+<!-- Sección para ingresar el código que llega al correo -->
 <section id="verify-view" style="display:none;">
     <h2>Verificar cuenta</h2>
 
     <input type="email" id="verifyEmail" placeholder="Email">
     <input type="text" id="verifyCode" placeholder="Código">
 
+    <!-- Ejecuta la función 'verify()' para validar el código -->
     <button onclick="verify()">Verificar</button>
 
     <p id="verifyMsg"></p>
 </section>
 
 <!-- DASHBOARD -->
+<!-- Sección principal del usuario, inicia oculta hasta que se loguee -->
 <section id="dashboard-view" style="display:none;">
     <h2>Dashboard</h2>
+    <!-- Aquí se mostrará el correo del usuario conectado -->
     <p>Bienvenido <b id="userEmail"></b></p>
+    <!-- Botón para cerrar sesión -->
     <button onclick="logout()">Cerrar sesión</button>
 </section>
 

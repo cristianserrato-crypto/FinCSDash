@@ -1,37 +1,57 @@
+/* Estilos para todo el cuerpo de la página */
 body {
+    /* Tipo de letra */
     font-family: Arial, sans-serif;
+    /* Color de fondo gris claro */
     background: #f4f6f8;
+    /* Quita los márgenes por defecto del navegador */
     margin: 0;
 }
 
+/* Estilos para la barra superior (header) */
 header {
+    /* Fondo azul oscuro */
     background: #2c3e50;
+    /* Texto blanco */
     color: white;
+    /* Espacio interno (relleno) */
     padding: 15px;
+    /* Centra el texto */
     text-align: center;
 }
 
+/* Estilos para el contenedor principal */
 main {
+    /* Ancho máximo de 400px (para que parezca una tarjeta centrada) */
     max-width: 400px;
+    /* Margen arriba/abajo de 40px y automático a los lados (centrado) */
     margin: 40px auto;
+    /* Fondo blanco */
     background: white;
     padding: 20px;
+    /* Bordes redondeados */
     border-radius: 8px;
 }
 
+/* Estilos para todos los campos de texto (inputs) */
 input {
+    /* Ocupan todo el ancho disponible */
     width: 100%;
     padding: 10px;
+    /* Margen vertical de 8px */
     margin: 8px 0;
 }
 
+/* Estilos para todos los botones */
 button {
     width: 100%;
     padding: 10px;
     margin-top: 10px;
+    /* Cambia el cursor a una manito al pasar por encima */
     cursor: pointer;
 }
 
+/* Estilos para los párrafos */
 p {
     font-size: 14px;
 }
