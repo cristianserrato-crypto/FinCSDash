@@ -1,6 +1,9 @@
 Flask
 flask-cors
+flask-jwt-extended
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
 requests
+Werkzeug
+fpdf
