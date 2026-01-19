@@ -687,5 +687,6 @@ def export_pdf():
 # =========================
 # INICIO DEL SERVIDOR
 # =========================
- if __name__ == "__main__":
-    pass
+@app.route("/google-login", methods=["POST"])
+def google_login():
+    ...
