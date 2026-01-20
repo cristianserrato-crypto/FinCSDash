@@ -13,7 +13,7 @@ header {
     /* Fondo azul oscuro */
     background: #7b0101;
     /* Texto blanco */
-    color: white;
+    color: rgb(168, 163, 163);
     /* Espacio interno (relleno) */
     padding: 15px;
     /* Centra el texto */
@@ -27,7 +27,7 @@ main {
     /* Margen arriba/abajo de 40px y automático a los lados (centrado) */
     margin: 40px auto;
     /* Fondo blanco */
-    background: rgb(211, 211, 211);
+    background: rgb(255, 255, 255);
     padding: 20px;
     /* Bordes redondeados */
     border-radius: 8px;
