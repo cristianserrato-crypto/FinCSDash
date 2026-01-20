@@ -1,9 +1,6 @@
 // Define la dirección del servidor (Backend).
-// Si el navegador dice que estamos en "localhost" o "127.0.0.1" (tu PC), usa el puerto 5000 local.
-// Si no, asume que estamos en internet y usa la dirección de Render.
-const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-    ? "http://127.0.0.1:5000"
-    : "https://fincsdash-backend.onrender.com";
+
+const API_URL = "https://fincsdash-backend.onrender.com";
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
@@ -296,32 +293,34 @@ function hideAll() {
 ====================== */
 // Función que se llama al dar clic en "Ingresar"
 function login() {
-    // Hace una petición POST al servidor (API)
-    fetch(`${API}/login`, {
+    fetch(`${API_URL}/login`, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        // Envía los datos del formulario convertidos a texto JSON
+        headers: {
+            "Content-Type": "application/json"
+        },
         body: JSON.stringify({
             email: document.getElementById("loginEmail").value,
             password: document.getElementById("loginPassword").value
         })
     })
-    .then(res => res.json()) // Convierte la respuesta del servidor a JSON
+    .then(res => res.json())
     .then(data => {
-        // Muestra el mensaje que respondió el servidor
-        const msg = document.getElementById("loginMsg");
-        if(msg) msg.innerText = data.message;
-        
-        // Si el login fue exitoso
-        if (data.message === "Login exitoso") {
-            // Guarda el token de seguridad en el navegador
+        if (data.token) {
+            // ✅ Guardar token
             localStorage.setItem("token", data.token);
-            currentUser = document.getElementById("loginEmail").value;
-            localStorage.setItem("email", currentUser); // Guardar email para F5
-            showDashboard(currentUser);
+            localStorage.setItem("usuario", document.getElementById("loginEmail").value);
+            
+            mostrarVista("finance");
+        } else {
+            alert(data.message);
         }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error al iniciar sesión");
     });
 }
+
 
 /* ======================
    MOVIMIENTOS (TABLA)
@@ -412,6 +411,29 @@ function renderMovements(data) {
         balanceDisplay.style.color = balance >= 0 ? "green" : "red";
     }
 }
+
+
+function consultarBalance() {
+    const token = localStorage.getItem("token");
+
+    fetch(`${API_URL}/balance`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log("Balance:", data);
+        alert(`Ingresos: ${data.ingresos}\nGastos: ${data.gastos}\nBalance: ${data.balance}`);
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error al consultar balance");
+    });
+}
+
 
 /* ======================
    GRÁFICO (CHART.JS)
