@@ -21,10 +21,10 @@ def crear_tablas():
     cursor = conn.cursor()
 
     # ⚠️ BORRAR TABLAS ANTERIORES (PARA PRUEBAS)
-     cursor.execute("DROP TABLE IF EXISTS ingresos")
-     cursor.execute("DROP TABLE IF EXISTS gastos")
-     cursor.execute("DROP TABLE IF EXISTS categorias")
-     cursor.execute("DROP TABLE IF EXISTS usuarios")
+    # cursor.execute("DROP TABLE IF EXISTS ingresos")
+    # cursor.execute("DROP TABLE IF EXISTS gastos")
+    # cursor.execute("DROP TABLE IF EXISTS categorias")
+    # cursor.execute("DROP TABLE IF EXISTS usuarios")
 
     # Tabla usuarios
     cursor.execute("""
