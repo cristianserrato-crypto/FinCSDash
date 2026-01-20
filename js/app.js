@@ -430,7 +430,12 @@ function login() {
     })
     .catch(err => {
         console.error("LOGIN ERROR:", err);
-        alert("Error al iniciar sesión");
+        const loginMsg = document.getElementById("loginMsg");
+        if (loginMsg) {
+            loginMsg.innerText = err.message || "Error al iniciar sesión. Verifica tu conexión o las credenciales.";
+            loginMsg.style.color = "red";
+        }
+        alert("Error al iniciar sesión"); // Mantenemos el alert para feedback inmediato
     });
 }
 
@@ -826,6 +831,13 @@ function register() {
     const email = document.getElementById("registerEmail").value;
     const password = document.getElementById("registerPassword").value;
 
+    // Limpiar mensajes previos
+    const msg = document.getElementById("registerMsg");
+    if(msg) {
+        msg.innerText = "";
+        msg.style.color = "";
+    }
+
     fetch(`${API}/register`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -834,13 +846,23 @@ function register() {
             password: password
         })
     })
-    .then(res => res.json())
+    .then(res => {
+        // Verificar si la respuesta no es exitosa (ej. 400 Bad Request, 500 Internal Server Error)
+        if (!res.ok) {
+            // Si no es exitosa, parsear el mensaje de error del backend
+            return res.json().then(errData => {
+                throw new Error(errData.message || "Error desconocido en el registro.");
+            });
+        }
+        return res.json(); // Si es exitosa, parsear la respuesta JSON
+    })
     .then(data => {
-        const msg = document.getElementById("registerMsg");
+        console.log("REGISTER RESPONSE:", data); // Registrar la respuesta completa para depuración
+
         if(msg) msg.innerText = data.message;
 
         // Si el mensaje indica éxito, redirigir al login
-        if (data.message.includes("registrado") || data.message.includes("código")) {
+        if (data.message.includes("registrado")) { // El backend ahora devuelve "Usuario registrado correctamente. Ya puedes iniciar sesión."
             document.getElementById("loginEmail").value = email;
             showLogin();
 
@@ -849,6 +871,19 @@ function register() {
                 loginMsg.innerText = "Registro exitoso. Por favor inicia sesión.";
                 loginMsg.style.color = "green";
             }
+        } else {
+            // Manejar otros mensajes, como "El usuario ya está registrado y verificado"
+            if (msg) {
+                msg.innerText = data.message;
+                msg.style.color = "red";
+            }
+        }
+    })
+    .catch(err => {
+        console.error("REGISTER ERROR:", err); // Registrar cualquier error de red o de parseo
+        if (msg) {
+            msg.innerText = err.message || "Error al registrar usuario. Inténtalo de nuevo.";
+            msg.style.color = "red";
         }
     });
 }
