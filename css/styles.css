@@ -11,7 +11,7 @@ body {
 /* Estilos para la barra superior (header) */
 header {
     /* Fondo azul oscuro */
-    background: #135291;
+    background: #05ced2;
     /* Texto blanco */
     color: white;
     /* Espacio interno (relleno) */
@@ -27,7 +27,7 @@ main {
     /* Margen arriba/abajo de 40px y automático a los lados (centrado) */
     margin: 40px auto;
     /* Fondo blanco */
-    background: rgb(225, 87, 87);
+    background: rgb(20, 94, 101);
     padding: 20px;
     /* Bordes redondeados */
     border-radius: 8px;
