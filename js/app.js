@@ -150,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
                 <!-- Encabezado -->
                 <div class="header-bar">
-                    div class="header-left">
+                    <div class="header-left">
                          <img src="./logo.png" alt="FinCSDash" class="app-logo">
                         <span class="app-name">FinCSDash</span>
                     </div>
