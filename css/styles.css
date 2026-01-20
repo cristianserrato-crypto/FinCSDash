@@ -3,7 +3,7 @@ body {
     /* Tipo de letra */
     font-family: Arial, sans-serif;
     /* Color de fondo gris claro */
-    background: #f4f6f8;
+    background: #a4a6a9;
     /* Quita los márgenes por defecto del navegador */
     margin: 0;
 }
@@ -11,7 +11,7 @@ body {
 /* Estilos para la barra superior (header) */
 header {
     /* Fondo azul oscuro */
-    background: #2c3e50;
+    background: #135291;
     /* Texto blanco */
     color: white;
     /* Espacio interno (relleno) */
@@ -27,7 +27,7 @@ main {
     /* Margen arriba/abajo de 40px y automático a los lados (centrado) */
     margin: 40px auto;
     /* Fondo blanco */
-    background: white;
+    background: rgb(225, 87, 87);
     padding: 20px;
     /* Bordes redondeados */
     border-radius: 8px;
