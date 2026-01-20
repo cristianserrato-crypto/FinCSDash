@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <span class="app-name">FinCSDash</span>
                     </div>
 
-                     <div class="header-right">
+                    <div class="header-right">
                         <span class="user-email" id="userEmail"></span>
                         <button onclick="logout()" class="btn btn-danger btn-sm">Salir</button>
                     </div>
