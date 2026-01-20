@@ -176,11 +176,16 @@ def login():
     conn.close()
 
     # user[1] es la contraseña encriptada guardada en la BD
-    if user and check_password_hash(user[1], password):
-        access_token = create_access_token(identity=email)
-        return jsonify({"message": "Login exitoso", "token": access_token}), 200
+    if user:
+        if check_password_hash(user[1], password):
+            access_token = create_access_token(identity=email)
+            return jsonify({"message": "Login exitoso", "token": access_token}), 200
+        else:
+            print(f"❌ Login fallido: Contraseña incorrecta para {email}")
     else:
-        return jsonify({"message": "Credenciales incorrectas"}), 401
+        print(f"❌ Login fallido: Usuario {email} no encontrado en la BD")
+
+    return jsonify({"message": "Credenciales incorrectas"}), 401
 
 
 # =========================

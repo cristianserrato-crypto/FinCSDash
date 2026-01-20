@@ -1,5 +1,6 @@
 // Define la dirección del servidor (Backend).
-const API = "https://fincsdash-backend.onrender.com";
+// const API = "https://fincsdash-backend.onrender.com"; // ☁️ Render (Producción)
+const API = "http://127.0.0.1:5000"; // 🏠 Local (Pruebas)
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
