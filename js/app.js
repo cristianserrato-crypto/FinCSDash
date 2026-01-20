@@ -296,9 +296,7 @@ function hideAll() {
 function login() {
     fetch(`${API_URL}/login`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             email: document.getElementById("loginEmail").value,
             password: document.getElementById("loginPassword").value
@@ -306,18 +304,20 @@ function login() {
     })
     .then(res => res.json())
     .then(data => {
+        console.log("LOGIN RESPONSE:", data); // 👈 DEBUG
+
         if (data.token) {
-            // ✅ Guardar token
+            // ✅ Guardar token y usuario
             localStorage.setItem("token", data.token);
             localStorage.setItem("usuario", document.getElementById("loginEmail").value);
-            
+
             mostrarVista("finance");
         } else {
-            alert(data.message);
+            alert(data.message || "Error al iniciar sesión");
         }
     })
     .catch(err => {
-        console.error(err);
+        console.error("LOGIN ERROR:", err);
         alert("Error al iniciar sesión");
     });
 }
