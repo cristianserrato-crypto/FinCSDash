@@ -1,6 +1,6 @@
 // Define la dirección del servidor (Backend).
-// const API = "https://fincsdash-backend.onrender.com"; // ☁️ Render (Producción)
-const API = "http://127.0.0.1:5000"; // 🏠 Local (Pruebas)
+const API = "https://fincsdash-backend.onrender.com"; // ☁️ Render (Producción)
+// const API = "http://127.0.0.1:5000"; // 🏠 Local (Pruebas)
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
@@ -877,7 +877,13 @@ function register() {
     .catch(err => {
         console.error("REGISTER ERROR:", err); // Registrar cualquier error de red o de parseo
         if (msg) {
-            msg.innerText = err.message || "Error al registrar usuario. Inténtalo de nuevo.";
+            // Si el error es de conexión (común en Render al despertar el server)
+            if (err instanceof TypeError && err.message.includes("Failed to fetch")) {
+                msg.innerText = "Error de conexión. El servidor puede estar iniciándose. Por favor, espera 30 segundos y vuelve a intentarlo.";
+            } else {
+                // Para otros errores, muestra el mensaje del backend
+                msg.innerText = err.message || "Error al registrar usuario. Inténtalo de nuevo.";
+            }
             msg.style.color = "red";
         }
     });
