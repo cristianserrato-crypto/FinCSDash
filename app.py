@@ -169,7 +169,7 @@ def login():
 
     cursor.execute("""
         SELECT id, password FROM usuarios
-        WHERE email = ? AND verificado = 1
+        WHERE email = ?
     """, (email,))
 
     user = cursor.fetchone()
@@ -180,7 +180,7 @@ def login():
         access_token = create_access_token(identity=email)
         return jsonify({"message": "Login exitoso", "token": access_token}), 200
     else:
-        return jsonify({"message": "Credenciales incorrectas o cuenta no verificada"}), 401
+        return jsonify({"message": "Credenciales incorrectas"}), 401
 
 
 # =========================
