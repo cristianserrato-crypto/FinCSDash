@@ -61,6 +61,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
 
+        /* NUEVO LAYOUT DASHBOARD */
+        .grid-dashboard {
+            display: grid;
+            grid-template-columns: 260px 1fr; /* Columna fija para nav, el resto flexible */
+            gap: 25px;
+            align-items: start;
+        }
+        .nav-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .nav-column .card, .content-column .card { /* Evitar doble margen inferior */
+            margin-bottom: 0;
+        }
+        @media (max-width: 900px) {
+            .grid-dashboard { 
+                grid-template-columns: 1fr; 
+            }
+            /* En móvil, la navegación se convierte en una barra de botones horizontales */
+            .nav-column .card {
+                margin-bottom: 25px; /* Espacio entre nav y contenido */
+            }
+            .nav-buttons {
+                flex-direction: row; /* Botones en fila */
+            }
+            .nav-buttons .btn {
+                flex-grow: 1; /* Ocupan el espacio disponible */
+            }
+            .nav-column h4 {
+                display: none; /* Ocultar el título "Navegación" en móvil */
+            }
+        }
+
         /* Typography */
         h2, h3, h4 { margin-top: 0; color: var(--dark); font-weight: 700; }
         .text-muted { color: var(--text-muted); font-size: 0.9em; }
@@ -160,81 +194,107 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 </div>
 
-                <!-- Panel de Control -->
-                <div class="grid-2">
-                    <!-- Tarjeta Agregar -->
-                    <div class="card">
-                        <h4>📝 Registrar Movimiento</h4>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Categoría</label>
-                            <select id="categoriaSelect" class="form-control"></select>
-                        </div>
-
-                        <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                            <div>
-                                <label class="form-label">Monto ($)</label>
-                                <input type="number" id="expenseAmount" placeholder="0.00" class="form-control">
-                            </div>
-                            <div>
-                                <label class="form-label">Fecha</label>
-                                <input type="date" id="expenseDate" class="form-control">
-                            </div>
-                        </div>
-
-                        <div class="flex-gap" style="margin-bottom: 25px;">
-                            <button onclick="addIncome()" class="btn btn-success w-100">＋ Ingreso</button>
-                            <button onclick="addExpense()" class="btn btn-danger w-100">－ Gasto</button>
-                        </div>
-
-                        <div style="border-top: 1px solid #eee; padding-top: 20px;">
-                            <label class="form-label">Nueva Categoría</label>
-                            <div class="flex-gap">
-                                <input type="text" id="newCategoryInput" placeholder="Nombre..." class="form-control">
-                                <button onclick="addCategory()" class="btn btn-secondary">Crear</button>
+                <div class="grid-dashboard">
+                    <!-- Columna de Navegación -->
+                    <div class="nav-column">
+                        <div class="card">
+                            <h4>Navegación</h4>
+                            <div class="nav-buttons">
+                                <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="btn btn-secondary w-100">Registrar</button>
+                                <button id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="btn btn-secondary w-100">Resumen</button>
+                                <button id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="btn btn-secondary w-100">Análisis</button>
+                                <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
                             </div>
                         </div>
                     </div>
-                    <!-- Tarjeta Resumen -->
-                    <div class="card">
-                        <h4>📊 Resumen Financiero</h4>
-                        <div style="text-align: center; padding: 20px 0;">
-                            <h2 id="filteredBalanceDisplay" class="balance-title">$0.00</h2>
-                            <p class="text-muted">Balance del periodo seleccionado</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Filtrar por Mes</label>
-                            <input type="month" id="monthFilter" onchange="filterMovements()" class="form-control">
-                        </div>
-                        
-                        <div class="flex-gap" style="margin-top: 20px;">
-                            <button onclick="exportToCSV()" class="btn btn-secondary w-100">📄 CSV</button>
-                            <button onclick="exportToPDF()" class="btn btn-secondary w-100">📑 PDF</button>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Gráfico y Tabla -->
-                <div class="card">
-                    <h4>📈 Análisis de Gastos</h4>
-                    <div style="height: 300px; position: relative;"><canvas id="expenseChart"></canvas></div>
-                </div>
+                    <!-- Columna de Contenido -->
+                    <div class="content-column">
+                        <!-- VISTA REGISTRAR MOVIMIENTO -->
+                        <div id="register-movement-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <h4>📝 Registrar Movimiento</h4>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Categoría</label>
+                                    <select id="categoriaSelect" class="form-control"></select>
+                                </div>
 
-                <div class="card">
-                    <h3 style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">Historial de Movimientos</h3>
-                    <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Categoría</th>
-                                <th onclick="sortTable('monto')" style="cursor:pointer;">Monto ↕</th>
-                                <th style="text-align: center;">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="movementsTableBody"></tbody>
-                    </table>
+                                <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                                    <div>
+                                        <label class="form-label">Monto ($)</label>
+                                        <input type="number" id="expenseAmount" placeholder="0.00" class="form-control">
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Fecha</label>
+                                        <input type="date" id="expenseDate" class="form-control">
+                                    </div>
+                                </div>
+
+                                <div class="flex-gap" style="margin-bottom: 25px;">
+                                    <button onclick="addIncome()" class="btn btn-success w-100">＋ Ingreso</button>
+                                    <button onclick="addExpense()" class="btn btn-danger w-100">－ Gasto</button>
+                                </div>
+
+                                <div style="border-top: 1px solid #eee; padding-top: 20px;">
+                                    <label class="form-label">Nueva Categoría</label>
+                                    <div class="flex-gap">
+                                        <input type="text" id="newCategoryInput" placeholder="Nombre..." class="form-control">
+                                        <button onclick="addCategory()" class="btn btn-secondary">Crear</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- VISTA RESUMEN -->
+                        <div id="summary-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <h4>📊 Resumen Financiero</h4>
+                                <div style="text-align: center; padding: 20px 0;">
+                                    <h2 id="filteredBalanceDisplay" class="balance-title">$0.00</h2>
+                                    <p class="text-muted">Balance del periodo seleccionado</p>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Filtrar por Mes</label>
+                                    <input type="month" id="monthFilter" onchange="filterMovements()" class="form-control">
+                                </div>
+                                
+                                <div class="flex-gap" style="margin-top: 20px;">
+                                    <button onclick="exportToCSV()" class="btn btn-secondary w-100">📄 CSV</button>
+                                    <button onclick="exportToPDF()" class="btn btn-secondary w-100">📑 PDF</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- VISTA ANÁLISIS -->
+                        <div id="analysis-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <h4>📈 Análisis de Gastos</h4>
+                                <p class="text-muted">Gráfico de gastos por categoría para el periodo seleccionado.</p>
+                                <div style="height: 350px; position: relative; margin-top: 20px;"><canvas id="expenseChart"></canvas></div>
+                            </div>
+                        </div>
+
+                        <!-- VISTA HISTORIAL -->
+                        <div id="history-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <h3 style="margin-bottom: 20px;">Historial de Movimientos</h3>
+                                <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Categoría</th>
+                                            <th onclick="sortTable('monto')" style="cursor:pointer;">Monto ↕</th>
+                                            <th style="text-align: center;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="movementsTableBody"></tbody>
+                                </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -290,11 +350,53 @@ function showDashboard(email) {
     // Carga las categorías y movimientos desde el servidor
     loadCategories();
     loadMovements();
+    // Establecer la vista inicial del dashboard
+    showDashboardView('register-movement-view');
 }
 
 // Función auxiliar para ocultar TODAS las secciones primero
 function hideAll() {
     document.querySelectorAll("section").forEach(s => s.style.display = "none");
+}
+
+// Función para cambiar entre vistas del dashboard
+function showDashboardView(viewId) {
+    // Ocultar todas las vistas del dashboard
+    document.querySelectorAll('.dashboard-view').forEach(view => {
+        view.style.display = 'none';
+    });
+
+    // Mostrar la vista solicitada
+    const viewToShow = document.getElementById(viewId);
+    if (viewToShow) {
+        viewToShow.style.display = 'block';
+    }
+
+    // Actualizar colores de los botones de navegación
+    document.querySelectorAll('.nav-buttons .btn').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+    });
+    
+    // Mapeo de viewId a buttonId
+    const buttonIdMap = {
+        'register-movement-view': 'nav-btn-register',
+        'summary-view': 'nav-btn-summary',
+        'analysis-view': 'nav-btn-analysis',
+        'history-view': 'nav-btn-history'
+    };
+
+    const activeBtn = document.getElementById(buttonIdMap[viewId]);
+    if (activeBtn) {
+        activeBtn.classList.remove('btn-secondary');
+        activeBtn.classList.add('btn-primary');
+    }
+
+    // Si la vista es el análisis, redibujar el gráfico para que se ajuste
+    // al contenedor que ahora es visible.
+    if (viewId === 'analysis-view' && myChart) {
+        myChart.resize();
+    }
 }
 
 /* ======================
@@ -736,10 +838,16 @@ function register() {
         const msg = document.getElementById("registerMsg");
         if(msg) msg.innerText = data.message;
 
-        // Si el mensaje indica éxito (contiene "registrado" o "código"), ir a verificar
+        // Si el mensaje indica éxito, redirigir al login
         if (data.message.includes("registrado") || data.message.includes("código")) {
-            document.getElementById("verifyEmail").value = email;
-            showVerify();
+            document.getElementById("loginEmail").value = email;
+            showLogin();
+
+            const loginMsg = document.getElementById("loginMsg");
+            if (loginMsg) {
+                loginMsg.innerText = "Registro exitoso. Por favor inicia sesión.";
+                loginMsg.style.color = "green";
+            }
         }
     });
 }

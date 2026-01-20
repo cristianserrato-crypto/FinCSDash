@@ -73,10 +73,8 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
-    hashed_password = generate_password_hash(password)
-    codigo = str(random.randint(100000, 999999))
-
     try:
+        hashed_password = generate_password_hash(password)
         conn = conectar_db()
         cursor = conn.cursor()
 
@@ -93,37 +91,23 @@ def register():
                     "message": "El usuario ya está registrado y verificado"
                 }), 400
             else:
+                # Si existe pero no está verificado, lo actualizamos y verificamos
                 cursor.execute("""
-                    UPDATE usuarios
-                    SET password = ?, codigo_verificacion = ?
-                    WHERE email = ?
-                """, (hashed_password, codigo, email))
+                    UPDATE usuarios SET password = ?, verificado = 1, codigo_verificacion = NULL WHERE email = ?
+                """, (hashed_password, email))
         else:
+            # Si no existe, lo creamos ya verificado
             cursor.execute("""
                 INSERT INTO usuarios (email, password, codigo_verificacion, verificado)
-                VALUES (?, ?, ?, 0)
-            """, (email, hashed_password, codigo))
+                VALUES (?, ?, NULL, 1)
+            """, (email, hashed_password))
 
         conn.commit()
         conn.close()
 
-        # ⬇️ ENVÍO DE CORREO (CONTROLADO)
-        import os
-        if os.getenv("RENDER") is None:
-            try:
-                enviar_correo(
-                    email,
-                    "Código de verificación - FinCSDash",
-                    f"Tu código es: {codigo}"
-                )
-            except Exception as e:
-                print("⚠️ Error enviando correo:", e)
-        else:
-            print("📌 Render detectado – correo deshabilitado")
-            print(f"🔑 CÓDIGO DE VERIFICACIÓN: {codigo}")
-
+        # Al suspender la verificación, el usuario se crea verificado y no se envía correo.
         return jsonify({
-            "message": "Usuario registrado. Revisa tu correo para el código."
+            "message": "Usuario registrado correctamente. Ya puedes iniciar sesión."
         }), 201
 
     except Exception as e:
