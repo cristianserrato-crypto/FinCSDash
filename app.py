@@ -73,6 +73,10 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
+    # --- VALIDACIÓN DE ENTRADA ---
+    if not email or not password:
+        return jsonify({"message": "El email y la contraseña son obligatorios."}), 400
+
     try:
         hashed_password = generate_password_hash(password)
         conn = conectar_db()

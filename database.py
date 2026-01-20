@@ -10,9 +10,10 @@ import os
 
 DB_NAME = "fincsdash.db"
 
-if os.path.exists(DB_NAME):
-    os.remove(DB_NAME)
-
+# ⚠️ ¡CUIDADO! La siguiente línea borraba la base de datos cada vez que se reiniciaba el servidor.
+# La he comentado para que los usuarios que registres no se borren durante las pruebas.
+# if os.path.exists(DB_NAME):
+#     os.remove(DB_NAME)
 def conectar_db():
     return sqlite3.connect(DB_NAME)
 
