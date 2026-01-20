@@ -136,6 +136,18 @@ document.addEventListener("DOMContentLoaded", () => {
         // Reemplaza el contenido HTML interno con todo el diseño del panel de control
         dashboard.innerHTML = `
             <div class="dashboard-container">
+            <div style="
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+">
+    ⚠️ <strong>FinCSDash – Versión de prueba (Demo)</strong><br>
+    No ingreses datos reales o sensibles. Esta aplicación está en fase de pruebas.
+</div>
                 <!-- Encabezado -->
                 <div class="header-bar">
                     <div style="display: flex; align-items: center; gap: 15px;">
