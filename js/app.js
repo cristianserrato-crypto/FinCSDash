@@ -150,14 +150,14 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
                 <!-- Encabezado -->
                 <div class="header-bar">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="${API}/logo" alt="FinCSDash" style="height: 45px;">
-                        <h2 style="margin: 0; font-size: 1.5rem;">FinCSDash</h2>
+                    div class="header-left">
+                         <img src="./logo.png" alt="FinCSDash" class="app-logo">
+                        <span class="app-name">FinCSDash</span>
                     </div>
-                    <div style="text-align: right;">
-                        <small class="text-muted" style="display: block;">Bienvenido,</small>
-                        <span id="userEmail" style="font-weight: 600;"></span>
-                        <button onclick="logout()" class="btn btn-danger" style="padding: 6px 15px; font-size: 0.85rem; margin-left: 15px;">Salir</button>
+
+                     <div class="header-right">
+                        <span class="user-email" id="userEmail"></span>
+                        <button onclick="logout()" class="btn btn-danger btn-sm">Salir</button>
                     </div>
                 </div>
 
