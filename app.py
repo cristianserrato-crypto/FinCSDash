@@ -75,7 +75,7 @@ def register():
     - Guarda usuario NO verificado
     - Envía código por correo
     """
-    data = request.json
+    data = request.get_json()
     email = data.get("email")
     password = data.get("password")
     hashed_password = generate_password_hash(password) # Encriptar contraseña
