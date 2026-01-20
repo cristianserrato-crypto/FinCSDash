@@ -69,48 +69,46 @@ def serve_logo():
 # =========================
 @app.route("/register", methods=["POST"])
 def register():
-    """
-    Registra un usuario:
-    - Genera código de verificación
-    - Guarda usuario NO verificado
-    - Envía código por correo
-    """
-    data = request.get_json()
+    data = request.json
     email = data.get("email")
     password = data.get("password")
-    hashed_password = generate_password_hash(password) # Encriptar contraseña
 
+    hashed_password = generate_password_hash(password)
     codigo = str(random.randint(100000, 999999))
 
     try:
         conn = conectar_db()
         cursor = conn.cursor()
 
-        # 1. Verificar si el usuario ya existe
-        cursor.execute("SELECT id, verificado FROM usuarios WHERE email = ?", (email,))
+        cursor.execute(
+            "SELECT id, verificado FROM usuarios WHERE email = ?",
+            (email,)
+        )
         usuario_existente = cursor.fetchone()
 
         if usuario_existente:
-            if usuario_existente[1] == 1: # Si ya está verificado
+            if usuario_existente[1] == 1:
                 conn.close()
-                return jsonify({"message": "El usuario ya está registrado y verificado"}), 400
+                return jsonify({
+                    "message": "El usuario ya está registrado y verificado"
+                }), 400
             else:
-                # Si existe pero NO está verificado, actualizamos contraseña y código (Reintento)
                 cursor.execute("""
-                    UPDATE usuarios SET password = ?, codigo_verificacion = ? WHERE email = ?
+                    UPDATE usuarios
+                    SET password = ?, codigo_verificacion = ?
+                    WHERE email = ?
                 """, (hashed_password, codigo, email))
         else:
-            # 2. Si no existe, lo creamos
             cursor.execute("""
                 INSERT INTO usuarios (email, password, codigo_verificacion, verificado)
-                VALUES (?, ?, ?, 0) 
+                VALUES (?, ?, ?, 0)
             """, (email, hashed_password, codigo))
 
         conn.commit()
         conn.close()
 
-        # 3. Intentar enviar correo (sin bloquear si falla)
-       # 3. Envío de correo SOLO en local
+        # ⬇️ ENVÍO DE CORREO (CONTROLADO)
+        import os
         if os.getenv("RENDER") is None:
             try:
                 enviar_correo(
@@ -118,12 +116,21 @@ def register():
                     "Código de verificación - FinCSDash",
                     f"Tu código es: {codigo}"
                 )
-            except Exception:
-                print("⚠️ Error enviando correo")
+            except Exception as e:
+                print("⚠️ Error enviando correo:", e)
         else:
             print("📌 Render detectado – correo deshabilitado")
             print(f"🔑 CÓDIGO DE VERIFICACIÓN: {codigo}")
 
+        return jsonify({
+            "message": "Usuario registrado. Revisa tu correo para el código."
+        }), 201
+
+    except Exception as e:
+        return jsonify({
+            "message": "Error al registrar usuario",
+            "error": str(e)
+        }), 400
 
 # =========================
 # VERIFICAR CÓDIGO
