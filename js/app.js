@@ -1,11 +1,8 @@
 // Define la dirección del servidor (Backend).
-
-const API_URL = "https://fincsdash-backend.onrender.com";
 const API = "https://fincsdash-backend.onrender.com";
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
-let usuarioActual = null;
 let currentMovements = []; // Para guardar los datos y poder ordenarlos
 let sortAsc = true;        // Para alternar entre ascendente y descendente
 let myChart = null;        // Variable global para el gráfico
@@ -294,7 +291,7 @@ function hideAll() {
 ====================== */
 // Función que se llama al dar clic en "Ingresar"
 function login() {
-    fetch(`${API_URL}/login`, {
+    fetch(`${API}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -304,11 +301,15 @@ function login() {
     })
     .then(res => res.json())
     .then(data => {
-        console.log("LOGIN RESPONSE:", data); // 👈 DEBUG
+        console.log("LOGIN RESPONSE:", data);
+
         if (data.token) {
-            // ✅ Guardar token y usuario
+            // Guardar token y email
             localStorage.setItem("token", data.token);
-            localStorage.setItem("usuario", document.getElementById("loginEmail").value);mostrarVista("finance");
+            localStorage.setItem("email", document.getElementById("loginEmail").value);
+
+            // 👉 Mostrar dashboard correctamente
+            showDashboard(document.getElementById("loginEmail").value);
         } else {
             alert(data.message || "Error al iniciar sesión");
         }
@@ -414,7 +415,7 @@ function renderMovements(data) {
 function consultarBalance() {
     const token = localStorage.getItem("token");
 
-    fetch(`${API_URL}/balance`, {
+    fetch(`${API}/balance`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
