@@ -4,8 +4,14 @@ Manejo de base de datos SQLite para FinCSDash
 """
 
 import sqlite3
+import os
+
+
 
 DB_NAME = "fincsdash.db"
+
+if os.path.exists(DB_NAME):
+    os.remove(DB_NAME)
 
 def conectar_db():
     return sqlite3.connect(DB_NAME)
