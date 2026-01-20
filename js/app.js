@@ -304,7 +304,7 @@ function login() {
     })
     .then(res => res.json())
     .then(data => {
-    console.log("LOGIN RESPONSE:", data); // 👈 OBLIGATORIO
+        console.log("LOGIN RESPONSE:", data); // 👈 OBLIGATORIO
 
     if (data.token) {
         localStorage.setItem("token", data.token);
