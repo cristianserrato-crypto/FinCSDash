@@ -861,20 +861,15 @@ function register() {
 
         if(msg) msg.innerText = data.message;
 
-        // Si el mensaje indica éxito, redirigir al login
-        if (data.message.includes("registrado")) { // El backend ahora devuelve "Usuario registrado correctamente. Ya puedes iniciar sesión."
-            document.getElementById("loginEmail").value = email;
-            showLogin();
-
-            const loginMsg = document.getElementById("loginMsg");
-            if (loginMsg) {
-                loginMsg.innerText = "Registro exitoso. Por favor inicia sesión.";
-                loginMsg.style.color = "green";
-            }
+        // --- LÓGICA RESTAURADA ---
+        // Si el registro fue exitoso y pide verificar, vamos a la pantalla de verificación.
+        if (data.message.includes("Revisa tu correo")) {
+            // Pasamos el email a la siguiente pantalla
+            document.getElementById("verifyEmail").value = email;
+            showVerify();
         } else {
-            // Manejar otros mensajes, como "El usuario ya está registrado y verificado"
+            // Si hay otro mensaje (ej: "usuario ya existe"), lo mostramos en rojo.
             if (msg) {
-                msg.innerText = data.message;
                 msg.style.color = "red";
             }
         }

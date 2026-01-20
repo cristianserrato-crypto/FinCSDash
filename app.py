@@ -73,12 +73,15 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
-    # --- VALIDACIÓN DE ENTRADA ---
+    # --- VALIDACIÓN DE ENTRADA (Mantenemos esta mejora para estabilidad) ---
     if not email or not password:
         return jsonify({"message": "El email y la contraseña son obligatorios."}), 400
 
+    # --- LÓGICA DE VERIFICACIÓN RESTAURADA ---
+    hashed_password = generate_password_hash(password)
+    codigo = str(random.randint(100000, 999999))
+
     try:
-        hashed_password = generate_password_hash(password)
         conn = conectar_db()
         cursor = conn.cursor()
 
@@ -89,29 +92,40 @@ def register():
         usuario_existente = cursor.fetchone()
 
         if usuario_existente:
+            # Si el usuario ya existe y está verificado, no hacemos nada.
             if usuario_existente[1] == 1:
                 conn.close()
                 return jsonify({
                     "message": "El usuario ya está registrado y verificado"
                 }), 400
+            # Si existe pero no está verificado, actualizamos su contraseña y código.
             else:
-                # Si existe pero no está verificado, lo actualizamos y verificamos
                 cursor.execute("""
-                    UPDATE usuarios SET password = ?, verificado = 1, codigo_verificacion = NULL WHERE email = ?
-                """, (hashed_password, email))
+                    UPDATE usuarios
+                    SET password = ?, codigo_verificacion = ?
+                    WHERE email = ?
+                """, (hashed_password, codigo, email))
         else:
-            # Si no existe, lo creamos ya verificado
+            # Si no existe, lo creamos con verificado = 0 y el código.
             cursor.execute("""
                 INSERT INTO usuarios (email, password, codigo_verificacion, verificado)
-                VALUES (?, ?, NULL, 1)
-            """, (email, hashed_password))
+                VALUES (?, ?, ?, 0)
+            """, (email, hashed_password, codigo))
 
         conn.commit()
         conn.close()
 
-        # Al suspender la verificación, el usuario se crea verificado y no se envía correo.
+        # --- ENVÍO DE CORREO RESTAURADO ---
+        # (Se imprime el código en la terminal para facilitar las pruebas locales)
+        print(f"🔑 CÓDIGO DE VERIFICACIÓN para {email}: {codigo}")
+        try:
+            # Esta función puede fallar si no tienes configurado gmail_service.py
+            enviar_correo(email, "Código de verificación", f"Tu código es: {codigo}")
+        except Exception as e:
+            print(f"⚠️  No se pudo enviar el correo: {e}")
+
         return jsonify({
-            "message": "Usuario registrado correctamente. Ya puedes iniciar sesión."
+            "message": "Usuario registrado. Revisa tu correo para el código de verificación."
         }), 201
 
     except Exception as e:
@@ -171,25 +185,22 @@ def login():
     conn = conectar_db()
     cursor = conn.cursor()
 
+    # --- RESTAURADO: Se vuelve a comprobar que el usuario esté verificado ---
     cursor.execute("""
         SELECT id, password FROM usuarios
-        WHERE email = ?
+        WHERE email = ? AND verificado = 1
     """, (email,))
 
     user = cursor.fetchone()
     conn.close()
 
     # user[1] es la contraseña encriptada guardada en la BD
-    if user:
-        if check_password_hash(user[1], password):
-            access_token = create_access_token(identity=email)
-            return jsonify({"message": "Login exitoso", "token": access_token}), 200
-        else:
-            print(f"❌ Login fallido: Contraseña incorrecta para {email}")
+    if user and check_password_hash(user[1], password):
+        access_token = create_access_token(identity=email)
+        return jsonify({"message": "Login exitoso", "token": access_token}), 200
     else:
-        print(f"❌ Login fallido: Usuario {email} no encontrado en la BD")
-
-    return jsonify({"message": "Credenciales incorrectas"}), 401
+        # Se restaura el mensaje de error original
+        return jsonify({"message": "Credenciales incorrectas o cuenta no verificada"}), 401
 
 
 # =========================
