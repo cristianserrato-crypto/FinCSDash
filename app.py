@@ -110,21 +110,19 @@ def register():
         conn.close()
 
         # 3. Intentar enviar correo (sin bloquear si falla)
-        try:
-            enviar_correo(email, "Código de verificación - FinCSDash", f"Tu código es: {codigo}")
-        except Exception as e:
-            print(f"⚠️ NO SE PUDO ENVIAR CORREO (¿Faltan credenciales?).")
-            print(f"🔑 TU CÓDIGO DE VERIFICACIÓN ES: {codigo}")
-
-        return jsonify({
-            "message": "Usuario registrado. Revisa tu correo (o la consola) para el código."
-        }), 201
-
-    except Exception as e:
-        return jsonify({
-            "message": "Error al registrar usuario",
-            "error": str(e)
-        }), 400
+       # 3. Envío de correo SOLO en local
+        if os.getenv("RENDER") is None:
+            try:
+                enviar_correo(
+                    email,
+                    "Código de verificación - FinCSDash",
+                    f"Tu código es: {codigo}"
+                )
+            except Exception:
+                print("⚠️ Error enviando correo")
+        else:
+            print("📌 Render detectado – correo deshabilitado")
+            print(f"🔑 CÓDIGO DE VERIFICACIÓN: {codigo}")
 
 
 # =========================
