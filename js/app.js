@@ -87,9 +87,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             .nav-buttons {
                 flex-direction: row; /* Botones en fila */
+                flex-wrap: wrap; /* Permitir que los botones se envuelvan a la siguiente línea */
+                justify-content: center; /* Centrar botones si no llenan la fila */
             }
             .nav-buttons .btn {
                 flex-grow: 1; /* Ocupan el espacio disponible */
+                width: auto; /* Anular el w-100 para que flex-grow funcione correctamente */
+                min-width: 120px; /* Asegurar un tamaño mínimo para cada botón */
             }
             .nav-column h4 {
                 display: none; /* Ocultar el título "Navegación" en móvil */
