@@ -858,19 +858,22 @@ function register() {
     })
     .then(data => {
         console.log("REGISTER RESPONSE:", data); // Registrar la respuesta completa para depuración
-
         if(msg) msg.innerText = data.message;
 
-        // --- LÓGICA RESTAURADA ---
-        // Si el registro fue exitoso y pide verificar, vamos a la pantalla de verificación.
-        if (data.message.includes("Revisa tu correo")) {
-            // Pasamos el email a la siguiente pantalla
-            document.getElementById("verifyEmail").value = email;
-            showVerify();
+        // --- LÓGICA MODIFICADA: Redirigir directamente al login si el registro es exitoso ---
+        if (data.message.includes("registrado correctamente")) {
+            document.getElementById("loginEmail").value = email;
+            showLogin();
+
+            const loginMsg = document.getElementById("loginMsg");
+            if (loginMsg) {
+                loginMsg.innerText = "Registro exitoso. Ya puedes iniciar sesión.";
+                loginMsg.style.color = "green";
+            }
         } else {
             // Si hay otro mensaje (ej: "usuario ya existe"), lo mostramos en rojo.
             if (msg) {
-                msg.style.color = "red";
+                msg.style.color = "red"; // Por ejemplo, si el usuario ya está registrado y verificado
             }
         }
     })

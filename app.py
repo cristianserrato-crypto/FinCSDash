@@ -73,59 +73,51 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
-    # --- VALIDACIÓN DE ENTRADA (Mantenemos esta mejora para estabilidad) ---
+    # --- VALIDACIÓN DE ENTRADA ---
     if not email or not password:
         return jsonify({"message": "El email y la contraseña son obligatorios."}), 400
 
-    # --- LÓGICA DE VERIFICACIÓN RESTAURADA ---
+    # --- LÓGICA PARA SUSPENDER VERIFICACIÓN ---
     hashed_password = generate_password_hash(password)
-    codigo = str(random.randint(100000, 999999))
+    # No generamos código de verificación ya que no se usará
 
     try:
         conn = conectar_db()
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, verificado FROM usuarios WHERE email = ?",
+            "SELECT id, verificado FROM usuarios WHERE email = ?", # Mantenemos la consulta para verificar si ya existe
             (email,)
         )
         usuario_existente = cursor.fetchone()
 
         if usuario_existente:
-            # Si el usuario ya existe y está verificado, no hacemos nada.
+            # Si el usuario ya existe y está verificado, informamos.
             if usuario_existente[1] == 1:
                 conn.close()
                 return jsonify({
                     "message": "El usuario ya está registrado y verificado"
                 }), 400
-            # Si existe pero no está verificado, actualizamos su contraseña y código.
+            # Si existe pero no está verificado, actualizamos su contraseña y lo marcamos como verificado.
             else:
                 cursor.execute("""
                     UPDATE usuarios
-                    SET password = ?, codigo_verificacion = ?
+                    SET password = ?, verificado = 1, codigo_verificacion = NULL
                     WHERE email = ?
-                """, (hashed_password, codigo, email))
+                """, (hashed_password, email))
         else:
-            # Si no existe, lo creamos con verificado = 0 y el código.
+            # Si no existe, lo creamos directamente como verificado.
             cursor.execute("""
                 INSERT INTO usuarios (email, password, codigo_verificacion, verificado)
-                VALUES (?, ?, ?, 0)
-            """, (email, hashed_password, codigo))
+                VALUES (?, ?, NULL, 1)
+            """, (email, hashed_password))
 
         conn.commit()
         conn.close()
 
-        # --- ENVÍO DE CORREO RESTAURADO ---
-        # (Se imprime el código en la terminal para facilitar las pruebas locales)
-        print(f"🔑 CÓDIGO DE VERIFICACIÓN para {email}: {codigo}")
-        try:
-            # Esta función puede fallar si no tienes configurado gmail_service.py
-            enviar_correo(email, "Código de verificación", f"Tu código es: {codigo}")
-        except Exception as e:
-            print(f"⚠️  No se pudo enviar el correo: {e}")
-
+        # No se envía correo de verificación ni se imprime el código
         return jsonify({
-            "message": "Usuario registrado. Revisa tu correo para el código de verificación."
+            "message": "Usuario registrado correctamente. Ya puedes iniciar sesión."
         }), 201
 
     except Exception as e:
@@ -226,10 +218,10 @@ def login():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    # --- RESTAURADO: Se vuelve a comprobar que el usuario esté verificado ---
+    # --- MODIFICADO: Ya no se comprueba el estado de verificación ---
     cursor.execute("""
         SELECT id, password FROM usuarios
-        WHERE email = ? AND verificado = 1
+        WHERE email = ?
     """, (email,))
 
     user = cursor.fetchone()
@@ -240,8 +232,8 @@ def login():
         access_token = create_access_token(identity=email)
         return jsonify({"message": "Login exitoso", "token": access_token}), 200
     else:
-        # Se restaura el mensaje de error original
-        return jsonify({"message": "Credenciales incorrectas o cuenta no verificada"}), 401
+        # --- MODIFICADO: Mensaje de error más genérico ---
+        return jsonify({"message": "Credenciales incorrectas"}), 401
 
 
 # =========================
