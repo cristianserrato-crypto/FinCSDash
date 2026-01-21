@@ -6,10 +6,9 @@ import os
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
-# --- CORRECCIÓN ---
-# Las credenciales se deben leer de variables de entorno con nombres genéricos.
-EMAIL_REMITENTE = os.environ.get("fincsdash.gmail.com")
-EMAIL_PASSWORD = os.environ.get("sozm wpvj tztj zipl)
+
+EMAIL_REMITENTE = "fincsdash@gmail.com"
+EMAIL_PASSWORD = "zelj aekz souk mckt"
 
 
 def enviar_correo(destinatario, asunto, mensaje):
