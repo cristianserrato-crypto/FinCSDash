@@ -65,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
         /* NUEVO LAYOUT DASHBOARD */
         .grid-dashboard {
             display: grid;
-            grid-template-columns: 260px 1fr; /* Columna fija para nav, el resto flexible */
+            grid-template-columns: 260px minmax(0, 1fr); /* FIX: minmax(0, 1fr) evita que la tabla desborde el contenedor */
             gap: 25px;
             align-items: start;
         }
@@ -79,7 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         @media (max-width: 900px) {
             .grid-dashboard { 
-                grid-template-columns: 1fr; 
+                grid-template-columns: minmax(0, 1fr); /* FIX: También en móvil para evitar scroll horizontal indeseado */
             }
             /* En móvil, la navegación se convierte en una barra de botones horizontales */
             .nav-column .card {
@@ -128,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .flex-gap { display: flex; gap: 10px; }
 
         /* Table */
-        .table-container { overflow-x: auto; border-radius: 12px; }
+        .table-container { overflow-x: auto; border-radius: 12px; width: 100%; }
         table { width: 100%; border-collapse: collapse; background: white; }
         th { 
             background-color: #f8f9fa; color: var(--text-muted); padding: 15px; 
@@ -1045,9 +1045,13 @@ function loadCategories() {
     fetch(`${API}/categories`, {
         headers: { "Authorization": "Bearer " + token }
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) throw new Error("Error cargando categorías");
+        return res.json();
+    })
     // Llena el menú desplegable (select) con las opciones recibidas
     .then(categorias => {
+        if (!Array.isArray(categorias)) return; // Validación para evitar errores si llega un objeto de error
         const select = document.getElementById("categoriaSelect");
         if (select) {
             select.innerHTML = "";
@@ -1058,7 +1062,8 @@ function loadCategories() {
                 select.appendChild(option);
             });
         }
-    });
+    })
+    .catch(err => console.error("Error categories:", err));
 }
 
 // Función para crear una nueva categoría personalizada
@@ -1077,12 +1082,21 @@ function addCategory() {
         },
         body: JSON.stringify({ nombre: nombre })
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            // Manejo robusto de errores: busca 'message' o 'msg' (JWT)
+            return res.json().then(err => { 
+                throw new Error(err.message || err.msg || "Error al agregar categoría"); 
+            });
+        }
+        return res.json();
+    })
     .then(data => {
         alert(data.message);
         if (data.message === "Categoría agregada") {
             input.value = "";
             loadCategories();
         }
-    });
+    })
+    .catch(err => alert(err.message));
 }
