@@ -953,7 +953,6 @@ function exportToPDF() {
         link.download = "reporte_gastos.pdf";
         link.click();
     })
-    .catch(err => alert(err.message));
     .catch(err => showToast(err.message, 'error'));
 }
 
@@ -971,7 +970,6 @@ function addExpense() {
     const fecha = document.getElementById("expenseDate").value;
 
     if (!tipo || !monto || !fecha) {
-        return alert("Por favor completa todos los campos (Categoría, Monto y Fecha)");
         return showToast("Completa todos los campos", 'error');
     }
 
@@ -1012,7 +1010,6 @@ function addIncome() {
     const fecha = document.getElementById("expenseDate").value;
 
     if (!monto || !fecha) {
-        return alert("Por favor completa el Monto y la Fecha");
         return showToast("Completa el Monto y la Fecha", 'error');
     }
 
@@ -1318,7 +1315,6 @@ function addCategory() {
     const input = document.getElementById("newCategoryInput");
     const nombre = input ? input.value : "";
 
-    if (!nombre) return alert("Escribe un nombre para la categoría");
     if (!nombre) return showToast("Escribe un nombre para la categoría", 'error');
 
     fetch(`${API}/add-category`, {
@@ -1346,7 +1342,6 @@ function addCategory() {
             loadCategories();
         }
     })
-    .catch(err => alert(err.message));
     .catch(err => showToast(err.message, 'error'));
 }
 
