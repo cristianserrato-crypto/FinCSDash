@@ -87,7 +87,7 @@ def crear_tablas():
     """)
 
     # Insertar categorías predefinidas
-    categorias_default = ["Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
+    categorias_default = ["Salario", "Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
     for cat in categorias_default:
         cursor.execute("INSERT OR IGNORE INTO categorias (usuario_id, nombre) VALUES (0, ?)", (cat,))
 
