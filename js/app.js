@@ -914,6 +914,70 @@ function verify() {
 }
 
 /* ======================
+   REENVIAR CÓDIGO
+====================== */
+function resendCode() {
+    const email = document.getElementById("verifyEmail").value;
+    const resendBtn = document.getElementById("resendBtn");
+    const resendMsg = document.getElementById("resendMsg");
+
+    if (!email) {
+        if(resendMsg) {
+            resendMsg.innerText = "No se encontró un email para reenviar el código.";
+            resendMsg.style.color = "red";
+        }
+        return;
+    }
+
+    // Deshabilitar botón y mostrar estado de carga
+    resendBtn.disabled = true;
+    resendBtn.innerText = "Enviando...";
+    if(resendMsg) {
+        resendMsg.innerText = "";
+        resendMsg.style.color = "";
+    }
+
+    fetch(`${API}/resend-code`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ email: email })
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(errData => { throw new Error(errData.message || "Error desconocido."); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        if(resendMsg) {
+            resendMsg.innerText = data.message;
+            resendMsg.style.color = "green";
+        }
+        // Iniciar temporizador de enfriamiento
+        let countdown = 30;
+        resendBtn.innerText = `Reenviar en ${countdown}s`;
+        const interval = setInterval(() => {
+            countdown--;
+            resendBtn.innerText = `Reenviar en ${countdown}s`;
+            if (countdown <= 0) {
+                clearInterval(interval);
+                resendBtn.disabled = false;
+                resendBtn.innerText = "Reenviar código";
+            }
+        }, 1000);
+    })
+    .catch(err => {
+        if(resendMsg) {
+            resendMsg.innerText = err.message;
+            resendMsg.style.color = "red";
+        }
+        // Reactivar botón inmediatamente en caso de error
+        resendBtn.disabled = false;
+        resendBtn.innerText = "Reenviar código";
+    });
+}
+
+/* ======================
    LOGOUT
 ====================== */
 // Función para cerrar sesión

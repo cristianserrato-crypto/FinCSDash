@@ -61,7 +61,7 @@ def index():
 @app.route("/logo")
 def serve_logo():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    logo_path = os.path.join(base_dir, "..", "logo.png")
+    logo_path = os.path.join(base_dir, "logo.png")
     return send_file(logo_path, mimetype='image/png')
 
 # =========================
@@ -168,6 +168,47 @@ def verify():
     else:
         conn.close()
         return jsonify({"message": "Código incorrecto"}), 400
+
+
+# =========================
+# REENVIAR CÓDIGO
+# =========================
+@app.route("/resend-code", methods=["POST"])
+def resend_code():
+    data = request.json
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"message": "El email es requerido."}), 400
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, verificado FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado."}), 404
+
+    if user[1] == 1: # El usuario ya está verificado
+        conn.close()
+        return jsonify({"message": "Esta cuenta ya ha sido verificada."}), 400
+
+    # Generar nuevo código y actualizarlo en la BD
+    new_code = str(random.randint(100000, 999999))
+    cursor.execute("UPDATE usuarios SET codigo_verificacion = ? WHERE email = ?", (new_code, email))
+    conn.commit()
+    conn.close()
+
+    # Enviar el nuevo correo
+    print(f"🔑 NUEVO CÓDIGO para {email}: {new_code}")
+    try:
+        enviar_correo(email, "Nuevo código de verificación", f"Tu nuevo código es: {new_code}")
+        return jsonify({"message": "Se ha enviado un nuevo código a tu correo."}), 200
+    except Exception as e:
+        print(f"⚠️  No se pudo reenviar el correo: {e}")
+        return jsonify({"message": "Error al reenviar el código. Inténtalo más tarde."}), 500
 
 
 # =========================

@@ -81,13 +81,17 @@
 <section id="verify-view" style="display:none;">
     <h2>Verificar cuenta</h2>
 
-    <input type="email" id="verifyEmail" placeholder="Email">
+    <input type="email" id="verifyEmail" placeholder="Email" readonly>
     <input type="text" id="verifyCode" placeholder="Código">
 
     <!-- Ejecuta la función 'verify()' para validar el código -->
     <button onclick="verify()">Verificar</button>
 
     <p id="verifyMsg"></p>
+
+    <p>¿No recibiste el código?</p>
+    <button id="resendBtn" onclick="resendCode()">Reenviar código</button>
+    <p id="resendMsg"></p>
 </section>
 
 <!-- DASHBOARD -->

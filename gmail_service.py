@@ -6,8 +6,10 @@ import os
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
-EMAIL_REMITENTE = os.environ.get("FinCSDash Render")
-EMAIL_PASSWORD = os.environ.get("sozm wpvj tztj zipl")
+# --- CORRECCIÓN ---
+# Las credenciales se deben leer de variables de entorno con nombres genéricos.
+EMAIL_REMITENTE = os.environ.get("fincsdash.gmail.com")
+EMAIL_PASSWORD = os.environ.get("sozm wpvj tztj zipl)
 
 
 def enviar_correo(destinatario, asunto, mensaje):

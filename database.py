@@ -38,6 +38,21 @@ def crear_tablas():
         )
     """)
 
+    # --- MIGRACIÓN AUTOMÁTICA (Solución definitiva para Render) ---
+    # Este bloque se asegura de que la tabla 'usuarios' tenga todas las columnas necesarias,
+    # incluso si la base de datos en el servidor es una versión antigua.
+    cursor.execute("PRAGMA table_info(usuarios)")
+    columnas_existentes = [col[1] for col in cursor.fetchall()]
+
+    if 'verificado' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'verificado' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0")
+
+    if 'codigo_verificacion' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'codigo_verificacion' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN codigo_verificacion TEXT")
+    # ---------------------------------------------------------------
+
     # Tabla ingresos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ingresos (
