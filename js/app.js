@@ -37,6 +37,25 @@ document.addEventListener("DOMContentLoaded", () => {
             margin: 0;
         }
 
+        /* --- MODO OSCURO --- */
+        body.dark-mode {
+            --bg-body: #121212;
+            --card-bg: #1e1e1e;
+            --dark: #f1f1f1;
+            --text-muted: #b0b0b0;
+        }
+        body.dark-mode .card { border: 1px solid #333; box-shadow: none; }
+        body.dark-mode .form-control { background-color: #2d2d2d; border-color: #444; color: #fff; }
+        body.dark-mode table { background-color: #1e1e1e; color: #fff; }
+        body.dark-mode th { background-color: #2d2d2d; color: #ccc; border-bottom-color: #444; }
+        body.dark-mode td { border-bottom-color: #333; }
+        body.dark-mode tr:hover td { background-color: #2d2d2d; }
+        body.dark-mode .header-bar { background-color: #1e1e1e; border-bottom: 1px solid #333; }
+        body.dark-mode .menu-toggle { color: #fff; }
+        body.dark-mode select option { background-color: #1e1e1e; color: #fff; }
+        body.dark-mode .toast { background-color: #2d2d2d; color: #fff; border: 1px solid #444; }
+        body.dark-mode .toast span { color: #fff; }
+
         /* Layout & Cards */
         .dashboard-container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
         
@@ -60,6 +79,17 @@ document.addEventListener("DOMContentLoaded", () => {
             margin-bottom: 30px;
         }
 
+        /* HAMBURGER MENU */
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: var(--dark);
+            margin-right: 10px;
+        }
+
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
 
         /* NUEVO LAYOUT DASHBOARD */
@@ -78,25 +108,26 @@ document.addEventListener("DOMContentLoaded", () => {
             margin-bottom: 0;
         }
         @media (max-width: 900px) {
+            .menu-toggle { display: block; } /* Mostrar botón en móvil */
+
             .grid-dashboard { 
                 grid-template-columns: minmax(0, 1fr); /* FIX: También en móvil para evitar scroll horizontal indeseado */
             }
-            /* En móvil, la navegación se convierte en una barra de botones horizontales */
-            .nav-column .card {
-                margin-bottom: 25px; /* Espacio entre nav y contenido */
+            
+            /* En móvil, la navegación se oculta por defecto */
+            .nav-column {
+                /* Animación suave */
+                max-height: 0;
+                opacity: 0;
+                overflow: hidden;
+                transition: max-height 0.4s ease-in-out, opacity 0.4s ease-in-out, margin-bottom 0.4s ease-in-out;
+                width: 100%;
             }
-            .nav-buttons {
-                flex-direction: row; /* Botones en fila */
-                flex-wrap: wrap; /* Permitir que los botones se envuelvan a la siguiente línea */
-                justify-content: center; /* Centrar botones si no llenan la fila */
-            }
-            .nav-buttons .btn {
-                flex-grow: 1; /* Ocupan el espacio disponible */
-                width: auto; /* Anular el w-100 para que flex-grow funcione correctamente */
-                min-width: 120px; /* Asegurar un tamaño mínimo para cada botón */
-            }
-            .nav-column h4 {
-                display: none; /* Ocultar el título "Navegación" en móvil */
+            /* Clase para mostrar la navegación al hacer clic */
+            .nav-column.active {
+                max-height: 500px; /* Altura suficiente para desplegar */
+                opacity: 1;
+                margin-bottom: 20px;
             }
         }
 
@@ -151,9 +182,56 @@ document.addEventListener("DOMContentLoaded", () => {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Skeleton Loading */
+        .skeleton {
+            height: 20px;
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        body.dark-mode .skeleton { background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%); }
+        @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* --- NUEVOS EFECTOS VISUALES --- */
+        /* Animación de entrada suave */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+
+        /* Efecto Hover en Tarjetas */
+        .card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+
+        /* Notificaciones Toast */
+        .toast-container {
+            position: fixed; top: 20px; right: 20px; z-index: 10000;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            background: white; padding: 15px 20px; border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15); border-left: 5px solid #333;
+            min-width: 250px; display: flex; align-items: center; justify-content: space-between;
+            animation: slideIn 0.3s ease-out forwards; font-size: 0.95rem;
+        }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.info { border-left-color: var(--primary); }
+        
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
     `;
     // Agrega los estilos al encabezado del documento
     document.head.appendChild(style);
+
+    // CREAR CONTENEDOR DE TOASTS
+    const toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.className = 'toast-container';
+    document.body.appendChild(toastContainer);
 
     // INYECTAR LIBRERÍA CHART.JS (Corrección para gráficos)
     // Verifica si ya existe el script de gráficos, si no, lo crea
@@ -190,10 +268,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 <!-- Encabezado -->
                 <div class="header-bar">
                     <div class="header-left">
+                         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
                          <img src="./logo.png" alt="FinCSDash" class="app-logo">
                     </div>
 
                     <div class="header-right">
+                        <button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm" style="margin-right: 10px;">🌙</button>
                         <span class="user-email" id="userEmail"></span>
                         <button onclick="logout()" class="btn btn-danger btn-sm">Salir</button>
                     </div>
@@ -277,6 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div class="card">
                                 <h4>📈 Análisis de Gastos</h4>
                                 <p class="text-muted">Gráfico de gastos por categoría para el periodo seleccionado.</p>
+                                <button id="clearChartFilterBtn" onclick="filterTableByCategory(null)" class="btn btn-secondary btn-sm" style="display: none; margin-bottom: 10px;">Limpiar Filtro</button>
                                 <div style="height: 350px; position: relative; margin-top: 20px;"><canvas id="expenseChart"></canvas></div>
                             </div>
                         </div>
@@ -312,6 +393,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if(dateInput) dateInput.value = today;
     }
 
+    // Cargar preferencia de Modo Oscuro
+    if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+    }
+
     // VERIFICAR SESIÓN AL CARGAR (CORRECCIÓN F5)
     // Busca si hay un token guardado en el navegador (localStorage)
     const storedToken = localStorage.getItem("token");
@@ -328,27 +414,57 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ======================
    VISTAS
 ====================== */
+// Función auxiliar para ajustar el diseño del contenedor principal <main>
+function adjustMainLayout(isDashboard) {
+    const main = document.querySelector("main");
+    const header = document.querySelector("header");
+    if (!main) return;
+
+    if (isDashboard) {
+        // En el Dashboard: Quitamos las restricciones de ancho y estilo de tarjeta
+        // para que ocupe toda la pantalla y se vea bien en PC.
+        main.style.maxWidth = "100%";
+        main.style.margin = "0";
+        main.style.padding = "0";
+        main.style.background = "transparent";
+        main.style.borderRadius = "0";
+        if (header) header.style.display = "none"; // Oculta la franja superior en el Dashboard
+    } else {
+        // En Login/Registro: Restauramos los estilos del CSS (tarjeta centrada de 400px)
+        main.style.maxWidth = "";
+        main.style.margin = "";
+        main.style.padding = "";
+        main.style.background = "";
+        main.style.borderRadius = "";
+        if (header) header.style.display = ""; // Muestra la franja superior en Login/Registro
+    }
+}
+
 // Función para mostrar la pantalla de Login
 function showLogin() {
     hideAll();
+    adjustMainLayout(false);
     document.getElementById("login-view").style.display = "block";
 }
 
 // Función para mostrar la pantalla de Registro
 function showRegister() {
     hideAll();
+    adjustMainLayout(false);
     document.getElementById("register-view").style.display = "block";
 }
 
 // Función para mostrar la pantalla de Verificación
 function showVerify() {
     hideAll();
+    adjustMainLayout(false);
     document.getElementById("verify-view").style.display = "block";
 }
 
 // Función para mostrar el Dashboard principal
 function showDashboard(email) {
     hideAll();
+    adjustMainLayout(true);
     document.getElementById("dashboard-view").style.display = "block";
     // Pone el email del usuario en el texto de bienvenida
     document.getElementById("userEmail").innerText = email;
@@ -375,6 +491,10 @@ function showDashboardView(viewId) {
     const viewToShow = document.getElementById(viewId);
     if (viewToShow) {
         viewToShow.style.display = 'block';
+        // Reiniciar animación de entrada
+        viewToShow.classList.remove('fade-in');
+        void viewToShow.offsetWidth; // Trigger reflow (truco para reiniciar animación CSS)
+        viewToShow.classList.add('fade-in');
     }
 
     // Actualizar colores de los botones de navegación
@@ -401,6 +521,12 @@ function showDashboardView(viewId) {
     // al contenedor que ahora es visible.
     if (viewId === 'analysis-view' && myChart) {
         myChart.resize();
+    }
+
+    // En móvil, cerrar el menú al seleccionar una opción para mejorar la experiencia
+    const navColumn = document.querySelector('.nav-column');
+    if (navColumn && navColumn.classList.contains('active')) {
+        navColumn.classList.remove('active');
     }
 }
 
@@ -430,6 +556,7 @@ function login() {
             showDashboard(document.getElementById("loginEmail").value);
         } else {
             alert(data.message || "Error al iniciar sesión");
+            showToast(data.message || "Error al iniciar sesión", 'error');
         }
     })
     .catch(err => {
@@ -440,7 +567,20 @@ function login() {
             loginMsg.style.color = "red";
         }
         alert("Error al iniciar sesión"); // Mantenemos el alert para feedback inmediato
+        showToast("Error al iniciar sesión", 'error');
     });
+}
+
+/* ======================
+   UTILIDADES DE FORMATO
+====================== */
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount);
 }
 
 
@@ -455,13 +595,16 @@ function loadMovements(month = null, year = null) {
 
     // Mostrar spinner en la tabla antes de cargar
     const tbody = document.getElementById("movementsTableBody");
+    // SKELETON LOADING: Barras grises en lugar de spinner
     if (tbody) {
-        tbody.innerHTML = `
+        tbody.innerHTML = Array(5).fill(0).map(() => `
             <tr>
-                <td colspan="4" style="padding: 20px; color: #666;">
-                    <div class="spinner"></div> Cargando movimientos...
-                </td>
-            </tr>`;
+                <td><div class="skeleton" style="width: 80px;"></div></td>
+                <td><div class="skeleton" style="width: 120px;"></div></td>
+                <td><div class="skeleton" style="width: 100px;"></div></td>
+                <td><div class="skeleton" style="width: 30px;"></div></td>
+            </tr>
+        `).join('');
     }
 
     // Construye la URL. Si hay mes y año, los agrega como filtros
@@ -516,7 +659,7 @@ function renderMovements(data) {
             <td>${formattedDate}</td>
             <td>${mov.categoria}</td>
             <td style="color: ${color}; font-weight: bold;">
-                ${signo}$${parseFloat(mov.monto).toFixed(2)}
+                ${signo} ${formatCurrency(mov.monto)}
             </td>
             <td>
                 <button onclick="deleteMovement(${mov.id}, '${mov.tipo}')" style="color: red; cursor: pointer;">🗑️</button>
@@ -529,7 +672,7 @@ function renderMovements(data) {
     const balanceDisplay = document.getElementById("filteredBalanceDisplay");
     if (balanceDisplay) {
         const balance = totalIngresos - totalGastos;
-        balanceDisplay.innerText = `Balance: $${balance.toFixed(2)}`;
+        balanceDisplay.innerText = `Balance: ${formatCurrency(balance)}`;
         balanceDisplay.style.color = balance >= 0 ? "green" : "red";
     }
 }
@@ -549,10 +692,12 @@ function consultarBalance() {
     .then(data => {
         console.log("Balance:", data);
         alert(`Ingresos: ${data.ingresos}\nGastos: ${data.gastos}\nBalance: ${data.balance}`);
+        showToast(`Balance: ${formatCurrency(data.balance)}`, 'info');
     })
     .catch(err => {
         console.error(err);
         alert("Error al consultar balance");
+        showToast("Error al consultar balance", 'error');
     });
 }
 
@@ -586,9 +731,19 @@ function renderChart(data) {
     const labels = sortedData.map(item => item.cat);
     const values = sortedData.map(item => item.amount);
 
-    // Colores: Verde para Ingreso, Rojo para Gastos
-    const bgColors = labels.map(cat => cat === "Ingreso" ? 'rgba(40, 167, 69, 0.6)' : 'rgba(220, 53, 69, 0.6)');
-    const borderColors = labels.map(cat => cat === "Ingreso" ? 'rgba(40, 167, 69, 1)' : 'rgba(220, 53, 69, 1)');
+    // --- ADAPTACIÓN A MODO OSCURO ---
+    const isDarkMode = document.body.classList.contains('dark-mode');
+
+    // Paletas: Colores normales vs. Colores brillantes/neón para fondo oscuro
+    const paletteLight = ['#e63946', '#f77f00', '#fcbf49', '#003049', '#d62828', '#2a9d8f', '#264653', '#457b9d'];
+    const paletteDark = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#ff924c', '#4cc9f0', '#f72585'];
+    
+    const palette = isDarkMode ? paletteDark : paletteLight;
+    const incomeColor = isDarkMode ? '#06d6a0' : '#2ec4b6'; // Verde más brillante en oscuro
+    const bgColors = labels.map((cat, i) => cat === "Ingreso" ? incomeColor : palette[i % palette.length]);
+    
+    // El borde separa los segmentos: blanco en modo claro, gris oscuro en modo oscuro
+    const borderColors = labels.map(() => isDarkMode ? '#1e1e1e' : '#ffffff');
 
     // 2. Destruir gráfico anterior si existe (para actualizar)
     if (myChart) {
@@ -599,7 +754,7 @@ function renderChart(data) {
     if (typeof Chart !== 'undefined') {
         // Usa la librería Chart.js para crear el gráfico visual
         myChart = new Chart(ctx, {
-            type: 'bar', // Puedes cambiar a 'pie' o 'doughnut' si prefieres
+            type: 'doughnut', // Cambiado a doughnut para mostrar leyenda y distribución
             data: {
                 labels: labels,
                 datasets: [{
@@ -613,11 +768,42 @@ function renderChart(data) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true }
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            color: isDarkMode ? '#e0e0e0' : '#666' // Texto blanco en modo oscuro
+                        }
+                    },
+                    // INTERACTIVIDAD: Filtrar tabla al hacer clic
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed !== null) { label += formatCurrency(context.parsed); }
+                                return label;
+                            }
+                        }
+                    }
                 }
             }
         });
+        
+        // Agregar evento de clic nativo al canvas para filtrar
+        ctx.onclick = function(evt) {
+            const points = myChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+            if (points.length) {
+                const firstPoint = points[0];
+                const label = myChart.data.labels[firstPoint.index];
+                filterTableByCategory(label);
+            } else {
+                // Si se hace clic fuera, restaurar tabla completa
+                filterTableByCategory(null);
+            }
+        };
     }
 }
 
@@ -636,6 +822,25 @@ function sortTable(column) {
     });
 
     renderMovements(currentMovements);
+}
+
+// Función para filtrar la tabla por categoría (usada por el gráfico)
+function filterTableByCategory(category) {
+    const btn = document.getElementById("clearChartFilterBtn");
+
+    if (!category) {
+        renderMovements(currentMovements);
+        showToast("Mostrando todos los movimientos", 'info');
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+    const filtered = currentMovements.filter(m => m.categoria === category);
+    renderMovements(filtered);
+    showToast(`Filtrado por: ${category}`, 'info');
+    if (btn) {
+        btn.style.display = 'inline-block';
+        btn.innerText = `Limpiar filtro: ${category} ✖`;
+    }
 }
 
 // Función que se ejecuta cuando cambias el filtro de mes
@@ -667,6 +872,7 @@ function deleteMovement(id, tipo) {
     .then(res => res.json())
     .then(data => {
         alert(data.message);
+        showToast(data.message, 'success');
         loadMovements(); // Recargar la tabla para ver los cambios
     });
 }
@@ -696,6 +902,7 @@ function exportToCSV() {
     .then(res => res.json())
     .then(data => {
         if (!data || data.length === 0) return alert("No hay datos para exportar");
+        if (!data || data.length === 0) return showToast("No hay datos para exportar", 'info');
 
         // Encabezados del CSV
         // Construye el contenido del archivo texto línea por línea
@@ -747,6 +954,7 @@ function exportToPDF() {
         link.click();
     })
     .catch(err => alert(err.message));
+    .catch(err => showToast(err.message, 'error'));
 }
 
 /* ======================
@@ -764,6 +972,7 @@ function addExpense() {
 
     if (!tipo || !monto || !fecha) {
         return alert("Por favor completa todos los campos (Categoría, Monto y Fecha)");
+        return showToast("Completa todos los campos", 'error');
     }
 
     // Envía los datos al servidor (POST)
@@ -782,6 +991,7 @@ function addExpense() {
     .then(res => res.json())
     .then(data => {
         alert(data.message);
+        showToast(data.message, 'success');
         if (data.message.includes("agregado")) {
             // Limpiar el formulario si fue exitoso
             document.getElementById("expenseAmount").value = "";
@@ -803,6 +1013,7 @@ function addIncome() {
 
     if (!monto || !fecha) {
         return alert("Por favor completa el Monto y la Fecha");
+        return showToast("Completa el Monto y la Fecha", 'error');
     }
 
     fetch(`${API}/add-income`, {
@@ -819,6 +1030,7 @@ function addIncome() {
     .then(res => res.json())
     .then(data => {
         alert(data.message);
+        showToast(data.message, 'success');
         if (data.message.includes("agregado")) {
             document.getElementById("expenseAmount").value = "";
             loadMovements(); // Actualizar tabla y gráfico
@@ -985,6 +1197,40 @@ function resendCode() {
 }
 
 /* ======================
+   MENU HAMBURGUESA
+====================== */
+function toggleMenu() {
+    const navColumn = document.querySelector('.nav-column');
+    if (navColumn) navColumn.classList.toggle('active');
+}
+
+/* ======================
+   MODO OSCURO
+====================== */
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+    
+    // Redibujar el gráfico si existen datos para aplicar los nuevos colores inmediatamente
+    if (currentMovements.length > 0) {
+        renderChart(currentMovements);
+    }
+}
+
+// Cerrar el menú si se hace clic fuera de él
+document.addEventListener('click', function(event) {
+    const navColumn = document.querySelector('.nav-column');
+    const menuToggle = document.querySelector('.menu-toggle');
+
+    // Si el menú está abierto, y el clic no fue dentro del menú ni en el botón
+    if (navColumn && navColumn.classList.contains('active')) {
+        if (!navColumn.contains(event.target) && (!menuToggle || !menuToggle.contains(event.target))) {
+            navColumn.classList.remove('active');
+        }
+    }
+});
+
+/* ======================
    LOGOUT
 ====================== */
 // Función para cerrar sesión
@@ -1073,6 +1319,7 @@ function addCategory() {
     const nombre = input ? input.value : "";
 
     if (!nombre) return alert("Escribe un nombre para la categoría");
+    if (!nombre) return showToast("Escribe un nombre para la categoría", 'error');
 
     fetch(`${API}/add-category`, {
         method: "POST",
@@ -1093,10 +1340,32 @@ function addCategory() {
     })
     .then(data => {
         alert(data.message);
+        showToast(data.message, data.message === "Categoría agregada" ? 'success' : 'info');
         if (data.message === "Categoría agregada") {
             input.value = "";
             loadCategories();
         }
     })
     .catch(err => alert(err.message));
+    .catch(err => showToast(err.message, 'error'));
+}
+
+/* ======================
+   UTILIDADES (TOASTS)
+====================== */
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${message}</span>`;
+    
+    container.appendChild(toast);
+
+    // Eliminar automáticamente después de 3 segundos
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-in forwards';
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 3000);
 }
