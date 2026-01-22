@@ -59,6 +59,10 @@ def crear_tablas():
     if 'dia_pago' not in columnas_existentes:
         print("MIGRANDO: Agregando columna 'dia_pago' a la tabla 'usuarios'.")
         cursor.execute("ALTER TABLE usuarios ADD COLUMN dia_pago INTEGER DEFAULT 1")
+
+    if 'foto_perfil' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'foto_perfil' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT")
     # ---------------------------------------------------------------
 
     # Tabla ingresos
@@ -102,6 +106,19 @@ def crear_tablas():
             categoria TEXT,
             monto REAL,
             dia_limite INTEGER,
+            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+        )
+    """)
+
+    # Tabla metas de ahorro
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS metas_ahorro (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER,
+            nombre TEXT,
+            monto_objetivo REAL,
+            monto_actual REAL DEFAULT 0,
+            fecha_limite TEXT,
             FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)

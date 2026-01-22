@@ -71,8 +71,26 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
 
                         <button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm" style="margin-right: 10px;">🌙</button>
-                        <span class="user-email" id="userEmail"></span>
-                        <button onclick="logout()" class="btn btn-danger btn-sm">Salir</button>
+                        
+                        <!-- PERFIL DE USUARIO -->
+                        <div class="profile-container">
+                            <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar">
+                                <span id="avatarInitial">U</span>
+                                <img id="avatarImage" src="" alt="Perfil" style="display:none;">
+                            </div>
+                            <div class="profile-dropdown" id="profileDropdown">
+                                <div class="dropdown-header">
+                                    <strong id="dropdownEmail">usuario@email.com</strong>
+                                </div>
+                                <div class="dropdown-body">
+                                    <label for="profilePhotoInput" class="dropdown-item">📷 Cambiar Foto</label>
+                                    <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
+                                    <button id="btnRemovePhoto" class="dropdown-item" onclick="removeProfilePhoto()" style="display:none; color: var(--danger);">🗑️ Eliminar Foto</button>
+                                    <div class="dropdown-divider"></div>
+                                    <button class="dropdown-item" onclick="logout()" style="color: var(--danger);">🚪 Cerrar Sesión</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -315,11 +333,12 @@ function showDashboard(email) {
             const view = document.getElementById("dashboard-view");
             view.style.display = "block";
             triggerFadeAnimation(view);
-            document.getElementById("userEmail").innerText = email;
+            // document.getElementById("userEmail").innerText = email; // Ya no usamos este span suelto
             loadCategories();
             loadMovements();
             // Cargar estado de pagos en segundo plano
             loadPaymentStatus();
+            loadProfile(); // Cargar foto y datos del perfil
             showDashboardView('payments-view'); // Mostrar estado de pagos como principal al inicio
         }
     });
@@ -365,7 +384,8 @@ function showDashboardView(viewId) {
         'summary-view': 'nav-btn-summary',
         'analysis-view': 'nav-btn-analysis',
         'history-view': 'nav-btn-history',
-        'payments-view': 'nav-btn-payments'
+        'payments-view': 'nav-btn-payments',
+        'savings-view': 'nav-btn-savings'
     };
 
     const activeBtn = document.getElementById(buttonIdMap[viewId]);
@@ -397,6 +417,10 @@ function showDashboardView(viewId) {
 
     if (viewId === 'payments-view') {
         loadPaymentStatus();
+    }
+
+    if (viewId === 'savings-view') {
+        loadSavingsGoals();
     }
 }
 
@@ -1121,11 +1145,20 @@ function toggleDarkMode() {
 document.addEventListener('click', function(event) {
     const navColumn = document.querySelector('.nav-column');
     const menuToggle = document.querySelector('.menu-toggle');
+    const profileDropdown = document.getElementById('profileDropdown');
+    const profileAvatar = document.getElementById('profileAvatar');
 
     // Si el menú está abierto, y el clic no fue dentro del menú ni en el botón
     if (navColumn && navColumn.classList.contains('active')) {
         if (!navColumn.contains(event.target) && (!menuToggle || !menuToggle.contains(event.target))) {
             navColumn.classList.remove('active');
+        }
+    }
+
+    // Cerrar dropdown de perfil si se hace clic fuera
+    if (profileDropdown && profileDropdown.classList.contains('active')) {
+        if (!profileDropdown.contains(event.target) && !profileAvatar.contains(event.target)) {
+            profileDropdown.classList.remove('active');
         }
     }
 });
@@ -1671,4 +1704,211 @@ function deleteRecurringExpense() {
         document.getElementById("edit-recurring-modal").style.display = "none";
         loadPaymentStatus(); // Actualizar la lista
     });
+}
+
+/* ======================
+   PERFIL DE USUARIO
+====================== */
+function toggleProfileMenu() {
+    const dropdown = document.getElementById("profileDropdown");
+    dropdown.classList.toggle("active");
+}
+
+function loadProfile() {
+    const token = localStorage.getItem("token");
+    fetch(`${API}/get-profile`, {
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.email) {
+            // Actualizar email en el dropdown
+            document.getElementById("dropdownEmail").innerText = data.email;
+            
+            const avatarImg = document.getElementById("avatarImage");
+            const avatarInitial = document.getElementById("avatarInitial");
+            const btnRemove = document.getElementById("btnRemovePhoto");
+
+            if (data.foto_perfil) {
+                // Si hay foto, mostrarla
+                avatarImg.src = data.foto_perfil;
+                avatarImg.style.display = "block";
+                avatarInitial.style.display = "none";
+                btnRemove.style.display = "flex"; // Mostrar opción de eliminar
+            } else {
+                // Si no, mostrar inicial
+                avatarInitial.innerText = data.email.charAt(0).toUpperCase();
+                avatarInitial.style.display = "block";
+                avatarImg.style.display = "none";
+                btnRemove.style.display = "none";
+            }
+        }
+    });
+}
+
+function uploadProfilePhoto() {
+    const input = document.getElementById("profilePhotoInput");
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        
+        // Convertir imagen a Base64
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Image = e.target.result;
+            const token = localStorage.getItem("token");
+
+            fetch(`${API}/update-photo`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({ foto: base64Image })
+            })
+            .then(res => res.json())
+            .then(data => {
+                showToast("Foto actualizada", "success");
+                loadProfile(); // Recargar para ver cambios
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removeProfilePhoto() {
+    if (!confirm("¿Quieres eliminar tu foto de perfil?")) return;
+    
+    const token = localStorage.getItem("token");
+    fetch(`${API}/delete-photo`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast("Foto eliminada", "info");
+        loadProfile();
+    });
+}
+
+/* ======================
+   METAS DE AHORRO
+====================== */
+function loadSavingsGoals() {
+    const token = localStorage.getItem("token");
+    fetch(`${API}/savings-goals`, {
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const container = document.getElementById("savingsListContainer");
+        container.innerHTML = "";
+
+        if (data.length === 0) {
+            container.innerHTML = "<p class='text-muted' style='text-align:center;'>No tienes metas de ahorro aún.</p>";
+            return;
+        }
+
+        data.forEach(meta => {
+            const porcentaje = Math.min(100, Math.round((meta.actual / meta.objetivo) * 100));
+            
+            const div = document.createElement("div");
+            div.className = "card";
+            div.style.padding = "20px";
+            div.style.marginBottom = "15px";
+            div.style.border = "1px solid var(--border-color)";
+            
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0;">${meta.nombre}</h4>
+                    <button onclick="deleteSavingsGoal(${meta.id})" style="background:none; border:none; cursor:pointer; color:var(--danger);">🗑️</button>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:var(--text-muted);">
+                    <span>${formatCurrency(meta.actual)} / ${formatCurrency(meta.objetivo)}</span>
+                    <span>${porcentaje}%</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${porcentaje}%"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <small class="text-muted">Meta: ${meta.fecha}</small>
+                    <button onclick="openUpdateSavingsModal(${meta.id}, '${meta.nombre}', ${meta.actual})" class="btn btn-sm btn-success">＋ Agregar $</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    });
+}
+
+function openAddSavingsModal() {
+    document.getElementById("newSavingsName").value = "";
+    document.getElementById("newSavingsTarget").value = "";
+    document.getElementById("newSavingsDate").value = "";
+    document.getElementById("add-savings-modal").style.display = "flex";
+}
+
+function saveSavingsGoal() {
+    const nombre = document.getElementById("newSavingsName").value;
+    const objetivo = document.getElementById("newSavingsTarget").value;
+    const fecha = document.getElementById("newSavingsDate").value;
+    const token = localStorage.getItem("token");
+
+    if (!nombre || !objetivo || !fecha) return showToast("Completa todos los campos", "error");
+
+    fetch(`${API}/add-savings-goal`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ nombre, objetivo, fecha })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast("Meta creada", "success");
+        document.getElementById("add-savings-modal").style.display = "none";
+        loadSavingsGoals();
+    });
+}
+
+function openUpdateSavingsModal(id, nombre, actual) {
+    document.getElementById("updateSavingsId").value = id;
+    document.getElementById("updateSavingsCurrent").value = actual;
+    document.getElementById("updateSavingsNameDisplay").innerText = nombre;
+    document.getElementById("addSavingsAmount").value = "";
+    document.getElementById("update-savings-modal").style.display = "flex";
+}
+
+function saveSavingsUpdate() {
+    const id = document.getElementById("updateSavingsId").value;
+    const current = parseFloat(document.getElementById("updateSavingsCurrent").value);
+    const toAdd = parseFloat(document.getElementById("addSavingsAmount").value);
+    const token = localStorage.getItem("token");
+
+    if (isNaN(toAdd) || toAdd <= 0) return showToast("Ingresa un monto válido", "error");
+
+    const newTotal = current + toAdd;
+
+    fetch(`${API}/update-savings-goal/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ monto_actual: newTotal })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast("Ahorro actualizado", "success");
+        document.getElementById("update-savings-modal").style.display = "none";
+        loadSavingsGoals();
+    });
+}
+
+function deleteSavingsGoal(id) {
+    if (!confirm("¿Eliminar esta meta de ahorro?")) return;
+    const token = localStorage.getItem("token");
+    fetch(`${API}/delete-savings-goal/${id}`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } })
+    .then(() => loadSavingsGoals());
 }

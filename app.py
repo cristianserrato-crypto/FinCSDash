@@ -454,6 +454,47 @@ def confirm_main_income():
     return jsonify({"message": f"Ingreso de {ingreso_base} registrado correctamente."}), 201
 
 # =========================
+# PERFIL DE USUARIO
+# =========================
+@app.route("/get-profile", methods=["GET"])
+@jwt_required()
+def get_profile():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, foto_perfil FROM usuarios WHERE email = ?", (email,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return jsonify({"email": row[0], "foto_perfil": row[1]}), 200
+    return jsonify({"message": "Usuario no encontrado"}), 404
+
+@app.route("/update-photo", methods=["POST"])
+@jwt_required()
+def update_photo():
+    email = get_jwt_identity()
+    data = request.json
+    foto = data.get("foto") # Base64 string
+    
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE usuarios SET foto_perfil = ? WHERE email = ?", (foto, email))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Foto actualizada"}), 200
+
+@app.route("/delete-photo", methods=["DELETE"])
+@jwt_required()
+def delete_photo():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE usuarios SET foto_perfil = NULL WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Foto eliminada"}), 200
+
+# =========================
 # OBTENER CATEGORÍAS
 # =========================
 @app.route("/categories", methods=["GET"])
@@ -720,6 +761,76 @@ def delete_income(id):
 
     return jsonify({"message": "Ingreso eliminado correctamente"}), 200
 
+
+# =========================
+# METAS DE AHORRO
+# =========================
+@app.route("/savings-goals", methods=["GET"])
+@jwt_required()
+def get_savings_goals():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+
+    cursor.execute("SELECT id, nombre, monto_objetivo, monto_actual, fecha_limite FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
+    metas = [{"id": r[0], "nombre": r[1], "objetivo": r[2], "actual": r[3], "fecha": r[4]} for r in cursor.fetchall()]
+    
+    conn.close()
+    return jsonify(metas), 200
+
+@app.route("/add-savings-goal", methods=["POST"])
+@jwt_required()
+def add_savings_goal():
+    data = request.json
+    email = get_jwt_identity()
+    
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+    
+    cursor.execute("""
+        INSERT INTO metas_ahorro (usuario_id, nombre, monto_objetivo, monto_actual, fecha_limite)
+        VALUES (?, ?, ?, ?, ?)
+    """, (user_id, data['nombre'], data['objetivo'], data.get('actual', 0), data['fecha']))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Meta creada exitosamente"}), 201
+
+@app.route("/update-savings-goal/<int:id>", methods=["PUT"])
+@jwt_required()
+def update_savings_goal(id):
+    data = request.json
+    email = get_jwt_identity()
+    nuevo_monto = data.get("monto_actual")
+    
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+    
+    cursor.execute("UPDATE metas_ahorro SET monto_actual = ? WHERE id = ? AND usuario_id = ?", (nuevo_monto, id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Meta actualizada"}), 200
+
+@app.route("/delete-savings-goal/<int:id>", methods=["DELETE"])
+@jwt_required()
+def delete_savings_goal(id):
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+    
+    cursor.execute("DELETE FROM metas_ahorro WHERE id = ? AND usuario_id = ?", (id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Meta eliminada"}), 200
 
 # =========================
 # CONSULTAR BALANCE
