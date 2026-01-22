@@ -8,6 +8,7 @@ let currentMovements = []; // Para guardar los datos y poder ordenarlos
 let sortAsc = true;        // Para alternar entre ascendente y descendente
 let myChart = null;        // Variable global para el gráfico
 let recurringExpensesTemp = []; // Para guardar temporalmente los gastos del onboarding
+let currentChartType = 'Gasto'; // Tipo de gráfico actual (Gasto por defecto)
 
 /* ======================
    ESTILOS (INYECCIÓN)
@@ -152,8 +153,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         <!-- VISTA ANÁLISIS -->
                         <div id="analysis-view" class="dashboard-view" style="display: none;">
                             <div class="card">
-                                <h4>📈 Análisis de Gastos</h4>
-                                <p class="text-muted">Gráfico de gastos por categoría para el periodo seleccionado.</p>
+                                <h4>📈 Análisis Financiero</h4>
+                                <div class="flex-gap" style="justify-content: center; margin-bottom: 15px;">
+                                    <button id="btnChartExpense" onclick="switchChartType('Gasto')" class="btn btn-primary btn-sm">Gastos</button>
+                                    <button id="btnChartIncome" onclick="switchChartType('Ingreso')" class="btn btn-secondary btn-sm">Ingresos</button>
+                                </div>
+                                <p class="text-muted" style="text-align: center;">Distribución de <span id="chartTitleType">Gastos</span> por categoría.</p>
+                                
                                 <button id="clearChartFilterBtn" onclick="filterTableByCategory(null)" class="btn btn-secondary btn-sm" style="display: none; margin-bottom: 10px;">Limpiar Filtro</button>
                                 <div style="height: 350px; position: relative; margin-top: 20px;"><canvas id="expenseChart"></canvas></div>
                             </div>
@@ -183,10 +189,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div id="payments-view" class="dashboard-view" style="display: none;">
                             <div class="card">
                                 <h4>📅 Estado de Pagos Mensuales</h4>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
                                     <div>
                                         <small class="text-muted">Ingreso Base</small>
                                         <div id="baseIncomeDisplay" style="font-weight: bold; color: var(--success);">--</div>
+                                        <!-- Contenedor para el botón de confirmar ingreso o estado -->
+                                        <div id="incomeStatusContainer" style="margin-top: 5px;">
+                                            <!-- Contenido dinámico: botón o texto -->
+                                        </div>
                                     </div>
                                     <div style="text-align: right;">
                                         <small class="text-muted">Disponible Real (Aprox)</small>
@@ -368,6 +378,8 @@ function showDashboardView(viewId) {
     // al contenedor que ahora es visible.
     if (viewId === 'analysis-view' && myChart) {
         myChart.resize();
+        // Asegurar que inicie en Gastos como se solicitó
+        switchChartType('Gasto');
     }
 
     // Controlar visibilidad del balance en el header
@@ -572,15 +584,39 @@ function consultarBalance() {
 /* ======================
    GRÁFICO (CHART.JS)
 ====================== */
-// Función para dibujar el gráfico de barras
+// Función para cambiar el tipo de gráfico
+function switchChartType(type) {
+    currentChartType = type;
+    
+    // Actualizar botones UI
+    const btnExpense = document.getElementById('btnChartExpense');
+    const btnIncome = document.getElementById('btnChartIncome');
+    const titleType = document.getElementById('chartTitleType');
+    
+    if (btnExpense && btnIncome) {
+        if (type === 'Gasto') {
+            btnExpense.className = 'btn btn-primary btn-sm';
+            btnIncome.className = 'btn btn-secondary btn-sm';
+            if(titleType) titleType.innerText = 'Gastos';
+        } else {
+            btnExpense.className = 'btn btn-secondary btn-sm';
+            btnIncome.className = 'btn btn-primary btn-sm';
+            if(titleType) titleType.innerText = 'Ingresos';
+        }
+    }
+    
+    renderChart(currentMovements);
+}
+
+// Función para dibujar el gráfico
 function renderChart(data) {
     const ctx = document.getElementById('expenseChart');
     if (!ctx) return; // Si no existe el canvas, no hacemos nada
 
-    // 1. Agrupar por categoría (Ingresos y Gastos)
-    // Crea un objeto donde suma los montos por cada categoría
+    // 1. Filtrar y Agrupar por categoría según el tipo seleccionado
     const montosPorCat = {};
     data.forEach(mov => {
+        if (mov.tipo !== currentChartType) return; // Solo procesar el tipo actual
         const cat = mov.categoria;
         const monto = parseFloat(mov.monto);
         montosPorCat[cat] = (montosPorCat[cat] || 0) + monto;
@@ -607,7 +643,7 @@ function renderChart(data) {
     
     const palette = isDarkMode ? paletteDark : paletteLight;
     const incomeColor = isDarkMode ? '#06d6a0' : '#2ec4b6'; // Verde más brillante en oscuro
-    const bgColors = labels.map((cat, i) => cat === "Ingreso" ? incomeColor : palette[i % palette.length]);
+    const bgColors = labels.map((cat, i) => currentChartType === "Ingreso" ? incomeColor : palette[i % palette.length]);
     
     // El borde separa los segmentos: blanco en modo claro, gris oscuro en modo oscuro
     const borderColors = labels.map(() => isDarkMode ? '#1e1e1e' : '#ffffff');
@@ -1453,6 +1489,18 @@ function loadPaymentStatus() {
         const realAvailable = data.ingreso_base - data.total_comprometido;
         document.getElementById("realAvailableDisplay").innerText = formatCurrency(realAvailable);
 
+        // Lógica para el botón de confirmar ingreso
+        const incomeStatusContainer = document.getElementById("incomeStatusContainer");
+        if (incomeStatusContainer) {
+            if (data.income_confirmed_this_month) {
+                incomeStatusContainer.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 500;">✓ Ingreso de este mes ya registrado</span>`;
+            } else if (data.ingreso_base > 0) {
+                incomeStatusContainer.innerHTML = `<button onclick="confirmMainIncome()" class="btn btn-success btn-sm">Confirmar Ingreso Recibido</button>`;
+            } else {
+                incomeStatusContainer.innerHTML = ""; // No mostrar nada si no hay ingreso base
+            }
+        }
+
         const container = document.getElementById("paymentsListContainer");
         container.innerHTML = "";
 
@@ -1542,6 +1590,33 @@ function quickPay(categoria, monto) {
         loadMovements();     // Actualizar historial en segundo plano
     })
     .catch(err => showToast("Error al registrar pago", 'error'));
+}
+
+function confirmMainIncome() {
+    if (!confirm("¿Confirmas que has recibido tu ingreso principal de este mes? Esto registrará un nuevo movimiento de ingreso.")) return;
+
+    const token = localStorage.getItem("token");
+    fetch(`${API}/confirm-main-income`, {
+        method: "POST",
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => { throw new Error(err.message); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        showToast(data.message, 'success');
+        // Recargar todo para que se reflejen los cambios
+        loadPaymentStatus();
+        loadMovements();
+    })
+    .catch(err => {
+        showToast(err.message, 'error');
+    });
 }
 
 /* ======================

@@ -309,8 +309,9 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
 }
 
 /* El input de contraseña dentro del wrapper necesita espacio a la derecha para el icono */
+/* Aumentamos el padding para que quepan el icono de validación Y el ojo */
 .password-wrapper input {
-    padding-right: 45px !important;
+    padding-right: 75px !important;
 }
 
 .toggle-password {
@@ -332,6 +333,12 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
 
 .toggle-password:hover {
     color: var(--primary);
+}
+
+/* Cuando un input con validación está en un wrapper de contraseña, movemos el icono de validación a la izquierda del ojo */
+.password-wrapper .input-success,
+.password-wrapper .input-error {
+    background-position: right 45px center;
 }
 
 /* --- MODAL --- */
