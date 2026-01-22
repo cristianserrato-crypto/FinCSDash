@@ -351,6 +351,11 @@ def payment_status():
 
     # Obtener gastos REALES hechos este mes
     mes_actual = datetime.now().strftime("%Y-%m")
+    
+    # Calcular el TOTAL de gastos del mes (para la alerta de presupuesto)
+    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ? AND fecha LIKE ?", (user_id, f"{mes_actual}%"))
+    total_gastos_mes = cursor.fetchone()[0] or 0
+
     cursor.execute("""
         SELECT tipo, SUM(monto) FROM gastos 
         WHERE usuario_id = ? AND fecha LIKE ?

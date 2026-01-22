@@ -72,6 +72,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         <button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm" style="margin-right: 10px;">🌙</button>
                         
+                        <!-- Botón Salir (Restaurado) -->
+                        <button onclick="logout()" class="btn btn-danger btn-sm" style="margin-right: 10px;">Salir</button>
+
                         <!-- PERFIL DE USUARIO -->
                         <div class="profile-container">
                             <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar">
@@ -87,7 +90,6 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
                                     <button id="btnRemovePhoto" class="dropdown-item" onclick="removeProfilePhoto()" style="display:none; color: var(--danger);">🗑️ Eliminar Foto</button>
                                     <div class="dropdown-divider"></div>
-                                    <button class="dropdown-item" onclick="logout()" style="color: var(--danger);">🚪 Cerrar Sesión</button>
                                 </div>
                             </div>
                         </div>
@@ -1515,6 +1517,35 @@ function loadPaymentStatus() {
     })
     .then(res => res.json())
     .then(data => {
+        // --- ALERTA DE PRESUPUESTO (80%) ---
+        const alertId = "budget-alert-banner";
+        const existingAlert = document.getElementById(alertId);
+        if (existingAlert) existingAlert.remove(); // Limpiar alerta previa si existe
+
+        // Si hay ingreso base configurado y los gastos superan el 80%
+        if (data.ingreso_base > 0 && data.total_gastos_mes >= (data.ingreso_base * 0.8)) {
+            const percentage = Math.round((data.total_gastos_mes / data.ingreso_base) * 100);
+            const card = document.querySelector("#payments-view .card");
+            
+            const alertDiv = document.createElement("div");
+            alertDiv.id = alertId;
+            alertDiv.style.cssText = `
+                background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
+                padding: 15px; border-radius: 8px; margin-bottom: 20px;
+                display: flex; align-items: center; gap: 15px; animation: fadeIn 0.5s;
+            `;
+            alertDiv.innerHTML = `
+                <div style="font-size: 24px;">⚠️</div>
+                <div>
+                    <strong>¡Cuidado con tus gastos!</strong>
+                    <div style="font-size: 0.9rem;">Has consumido el <strong>${percentage}%</strong> de tus ingresos mensuales (${formatCurrency(data.total_gastos_mes)}).</div>
+                </div>
+            `;
+            
+            if (card) card.insertBefore(alertDiv, card.firstChild);
+        }
+        // ------------------------------------
+
         document.getElementById("baseIncomeDisplay").innerText = formatCurrency(data.ingreso_base);
         
         // Calcular disponible real (Ingreso Base - Gastos Comprometidos)

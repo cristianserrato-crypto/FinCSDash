@@ -306,25 +306,28 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
 .password-wrapper {
     position: relative;
     width: 100%;
+    display: flex;
+    align-items: center;
 }
 
 /* El input de contraseña dentro del wrapper necesita espacio a la derecha para el icono */
 /* Aumentamos el padding para que quepan el icono de validación Y el ojo */
 .password-wrapper input {
-    padding-right: 75px !important;
+    padding-right: 50px !important;
 }
 
 .toggle-password {
     position: absolute;
     top: 50%;
-    right: 15px;
+    right: 10px;
     transform: translateY(-50%);
     background: none;
     border: none;
     cursor: pointer;
     font-size: 1.2rem;
     color: var(--text-muted);
-    padding: 0;
+    padding: 5px;
+    z-index: 10;
     /* Sobrescribir estilos generales de botones de la vista de login */
     width: auto;
     text-transform: none;
