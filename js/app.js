@@ -7,6 +7,7 @@ let currentUser = null;
 let currentMovements = []; // Para guardar los datos y poder ordenarlos
 let sortAsc = true;        // Para alternar entre ascendente y descendente
 let myChart = null;        // Variable global para el gráfico
+let recurringExpensesTemp = []; // Para guardar temporalmente los gastos del onboarding
 
 /* ======================
    ESTILOS (INYECCIÓN)
@@ -14,218 +15,7 @@ let myChart = null;        // Variable global para el gráfico
 // Cambiar fondo a blanco y botones a gris
 // Este evento se ejecuta cuando el HTML termina de cargarse
 document.addEventListener("DOMContentLoaded", () => {
-    // Crea una etiqueta <style> nueva
-    const style = document.createElement('style');
-    // Escribe reglas CSS dentro de esa etiqueta.
-    // Esto se hace aquí para agregar estilos avanzados dinámicamente sin ensuciar el archivo CSS principal.
-    style.innerHTML = `
-        :root {
-            --primary: #4361ee;
-            --success: #2ec4b6;
-            --danger: #e63946;
-            --dark: #2b2d42;
-            --light: #f8f9fa;
-            --bg-body: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-muted: #6c757d;
-        }
-
-        body { 
-            background-color: var(--bg-body) !important; 
-            color: var(--dark) !important; 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-        }
-
-        /* --- MODO OSCURO --- */
-        body.dark-mode {
-            --bg-body: #121212;
-            --card-bg: #1e1e1e;
-            --dark: #f1f1f1;
-            --text-muted: #b0b0b0;
-        }
-        body.dark-mode .card { border: 1px solid #333; box-shadow: none; }
-        body.dark-mode .form-control { background-color: #2d2d2d; border-color: #444; color: #fff; }
-        body.dark-mode table { background-color: #1e1e1e; color: #fff; }
-        body.dark-mode th { background-color: #2d2d2d; color: #ccc; border-bottom-color: #444; }
-        body.dark-mode td { border-bottom-color: #333; }
-        body.dark-mode tr:hover td { background-color: #2d2d2d; }
-        body.dark-mode .header-bar { background-color: #1e1e1e; border-bottom: 1px solid #333; }
-        body.dark-mode .menu-toggle { color: #fff; }
-        body.dark-mode select option { background-color: #1e1e1e; color: #fff; }
-        body.dark-mode .toast { background-color: #2d2d2d; color: #fff; border: 1px solid #444; }
-        body.dark-mode .toast span { color: #fff; }
-
-        /* Layout & Cards */
-        .dashboard-container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
-        
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(0,0,0,0.02);
-        }
-
-        .header-bar {
-            background: var(--card-bg);
-            padding: 15px 25px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-bottom: 30px;
-        }
-
-        /* HAMBURGER MENU */
-        .menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 1.8rem;
-            cursor: pointer;
-            color: var(--dark);
-            margin-right: 10px;
-        }
-
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
-
-        /* NUEVO LAYOUT DASHBOARD */
-        .grid-dashboard {
-            display: grid;
-            grid-template-columns: 260px minmax(0, 1fr); /* FIX: minmax(0, 1fr) evita que la tabla desborde el contenedor */
-            gap: 25px;
-            align-items: start;
-        }
-        .nav-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .nav-column .card, .content-column .card { /* Evitar doble margen inferior */
-            margin-bottom: 0;
-        }
-        @media (max-width: 900px) {
-            .menu-toggle { display: block; } /* Mostrar botón en móvil */
-
-            .grid-dashboard { 
-                grid-template-columns: minmax(0, 1fr); /* FIX: También en móvil para evitar scroll horizontal indeseado */
-            }
-            
-            /* En móvil, la navegación se oculta por defecto */
-            .nav-column {
-                /* Animación suave */
-                max-height: 0;
-                opacity: 0;
-                overflow: hidden;
-                transition: max-height 0.4s ease-in-out, opacity 0.4s ease-in-out, margin-bottom 0.4s ease-in-out;
-                width: 100%;
-            }
-            /* Clase para mostrar la navegación al hacer clic */
-            .nav-column.active {
-                max-height: 500px; /* Altura suficiente para desplegar */
-                opacity: 1;
-                margin-bottom: 20px;
-            }
-        }
-
-        /* Typography */
-        h2, h3, h4 { margin-top: 0; color: var(--dark); font-weight: 700; }
-        .text-muted { color: var(--text-muted); font-size: 0.9em; }
-        .balance-title { font-size: 2.8em; margin: 10px 0; color: var(--primary); font-weight: 800; }
-
-        /* Forms */
-        .form-group { margin-bottom: 15px; }
-        .form-label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; font-size: 0.9rem; }
-        .form-control {
-            width: 100%; padding: 12px; border: 1px solid #e0e0e0; border-radius: 8px;
-            font-size: 1rem; transition: all 0.2s; box-sizing: border-box;
-        }
-        .form-control:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15); }
-
-        /* Buttons */
-        .btn {
-            padding: 12px 20px; border: none; border-radius: 8px; font-weight: 600;
-            cursor: pointer; transition: transform 0.1s, opacity 0.2s; font-size: 0.95rem;
-        }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-primary { background-color: var(--primary) !important; color: white !important; }
-        .btn-success { background-color: var(--success) !important; color: white !important; }
-        .btn-danger { background-color: var(--danger) !important; color: white !important; }
-        .btn-secondary { background-color: #6c757d !important; color: white !important; }
-        .w-100 { width: 100%; }
-        .flex-gap { display: flex; gap: 10px; }
-
-        /* Table */
-        .table-container { overflow-x: auto; border-radius: 12px; width: 100%; }
-        table { width: 100%; border-collapse: collapse; background: white; }
-        th { 
-            background-color: #f8f9fa; color: var(--text-muted); padding: 15px; 
-            text-align: left; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px;
-            border-bottom: 2px solid #eee;
-        }
-        td { padding: 15px; border-bottom: 1px solid #f1f1f1; vertical-align: middle; }
-        tr:hover td { background-color: #fcfcfc; }
-        
-        /* Spinner */
-        .spinner {
-            border: 3px solid rgba(0,0,0,0.1);
-            border-top: 3px solid var(--primary);
-            border-radius: 50%;
-            width: 24px; height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block; vertical-align: middle;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Skeleton Loading */
-        .skeleton {
-            height: 20px;
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: skeleton-loading 1.5s infinite;
-            border-radius: 4px;
-        }
-        body.dark-mode .skeleton { background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%); }
-        @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-        /* --- NUEVOS EFECTOS VISUALES --- */
-        /* Animación de entrada suave */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
-
-        /* Efecto Hover en Tarjetas */
-        .card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
-
-        /* Notificaciones Toast */
-        .toast-container {
-            position: fixed; top: 20px; right: 20px; z-index: 10000;
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        .toast {
-            background: white; padding: 15px 20px; border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15); border-left: 5px solid #333;
-            min-width: 250px; display: flex; align-items: center; justify-content: space-between;
-            animation: slideIn 0.3s ease-out forwards; font-size: 0.95rem;
-        }
-        .toast.success { border-left-color: var(--success); }
-        .toast.error { border-left-color: var(--danger); }
-        .toast.info { border-left-color: var(--primary); }
-        
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
-    `;
-    // Agrega los estilos al encabezado del documento
-    document.head.appendChild(style);
+    // Los estilos se han movido a css/styles.css para una mejor organización.
 
     // CREAR CONTENEDOR DE TOASTS
     const toastContainer = document.createElement('div');
@@ -273,6 +63,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
 
                     <div class="header-right">
+                        <!-- Balance Permanente (Mini Label) -->
+                        <div id="miniBalanceContainer" style="margin-right: 15px; text-align: right; display: none;">
+                            <small style="display: block; font-size: 0.7rem; opacity: 0.7; line-height: 1.2;">Saldo Actual</small>
+                            <span id="miniBalanceAmount" style="font-weight: 700; font-size: 1rem;">--</span>
+                        </div>
+
                         <button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm" style="margin-right: 10px;">🌙</button>
                         <span class="user-email" id="userEmail"></span>
                         <button onclick="logout()" class="btn btn-danger btn-sm">Salir</button>
@@ -288,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="btn btn-secondary w-100">Registrar</button>
                                 <button id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="btn btn-secondary w-100">Resumen</button>
                                 <button id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="btn btn-secondary w-100">Análisis</button>
+                                <button id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="btn btn-secondary w-100">Estado Pagos</button>
                                 <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
                             </div>
                         </div>
@@ -381,6 +178,24 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
                             </div>
                         </div>
+
+                        <!-- VISTA ESTADO DE PAGOS (NUEVA) -->
+                        <div id="payments-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <h4>📅 Estado de Pagos Mensuales</h4>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
+                                    <div>
+                                        <small class="text-muted">Ingreso Base</small>
+                                        <div id="baseIncomeDisplay" style="font-weight: bold; color: var(--success);">--</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <small class="text-muted">Disponible Real (Aprox)</small>
+                                        <div id="realAvailableDisplay" style="font-weight: bold; font-size: 1.2rem; color: var(--primary);">--</div>
+                                    </div>
+                                </div>
+                                <div id="paymentsListContainer"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -409,6 +224,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Si no, muestra el login
         showLogin();
     }
+
+    // INICIAR VALIDACIÓN DE FORMULARIOS
+    setupRegisterValidation();
+    // INICIAR TOGGLE DE CONTRASEÑA
+    setupPasswordToggles();
 });
 
 /* ======================
@@ -444,40 +264,68 @@ function adjustMainLayout(isDashboard) {
 function showLogin() {
     hideAll();
     adjustMainLayout(false);
-    document.getElementById("login-view").style.display = "block";
+    const view = document.getElementById("login-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
 }
 
 // Función para mostrar la pantalla de Registro
 function showRegister() {
     hideAll();
     adjustMainLayout(false);
-    document.getElementById("register-view").style.display = "block";
+    const view = document.getElementById("register-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
 }
 
 // Función para mostrar la pantalla de Verificación
 function showVerify() {
     hideAll();
     adjustMainLayout(false);
-    document.getElementById("verify-view").style.display = "block";
+    const view = document.getElementById("verify-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
 }
 
 // Función para mostrar el Dashboard principal
 function showDashboard(email) {
     hideAll();
-    adjustMainLayout(true);
-    document.getElementById("dashboard-view").style.display = "block";
-    // Pone el email del usuario en el texto de bienvenida
-    document.getElementById("userEmail").innerText = email;
-    // Carga las categorías y movimientos desde el servidor
-    loadCategories();
-    loadMovements();
-    // Establecer la vista inicial del dashboard
-    showDashboardView('register-movement-view');
+    
+    // VERIFICAR SI NECESITA ONBOARDING
+    const token = localStorage.getItem("token");
+    fetch(`${API}/check-onboarding`, {
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.needs_onboarding) {
+            startOnboarding();
+        } else {
+            adjustMainLayout(true);
+            const view = document.getElementById("dashboard-view");
+            view.style.display = "block";
+            triggerFadeAnimation(view);
+            document.getElementById("userEmail").innerText = email;
+            loadCategories();
+            loadMovements();
+            // Cargar estado de pagos en segundo plano
+            loadPaymentStatus();
+            showDashboardView('payments-view'); // Mostrar estado de pagos como principal al inicio
+        }
+    });
 }
 
 // Función auxiliar para ocultar TODAS las secciones primero
 function hideAll() {
     document.querySelectorAll("section").forEach(s => s.style.display = "none");
+}
+
+// Función auxiliar para reiniciar la animación fade-in
+function triggerFadeAnimation(element) {
+    if (!element) return;
+    element.classList.remove('fade-in');
+    void element.offsetWidth; // Trigger reflow (truco para reiniciar animación CSS)
+    element.classList.add('fade-in');
 }
 
 // Función para cambiar entre vistas del dashboard
@@ -491,10 +339,8 @@ function showDashboardView(viewId) {
     const viewToShow = document.getElementById(viewId);
     if (viewToShow) {
         viewToShow.style.display = 'block';
-        // Reiniciar animación de entrada
-        viewToShow.classList.remove('fade-in');
-        void viewToShow.offsetWidth; // Trigger reflow (truco para reiniciar animación CSS)
-        viewToShow.classList.add('fade-in');
+        // Usar la nueva función auxiliar
+        triggerFadeAnimation(viewToShow);
     }
 
     // Actualizar colores de los botones de navegación
@@ -508,7 +354,8 @@ function showDashboardView(viewId) {
         'register-movement-view': 'nav-btn-register',
         'summary-view': 'nav-btn-summary',
         'analysis-view': 'nav-btn-analysis',
-        'history-view': 'nav-btn-history'
+        'history-view': 'nav-btn-history',
+        'payments-view': 'nav-btn-payments'
     };
 
     const activeBtn = document.getElementById(buttonIdMap[viewId]);
@@ -523,10 +370,21 @@ function showDashboardView(viewId) {
         myChart.resize();
     }
 
+    // Controlar visibilidad del balance en el header
+    const miniBalance = document.getElementById("miniBalanceContainer");
+    if (miniBalance) {
+        // Se oculta si estamos en la vista de resumen, se muestra en las demás
+        miniBalance.style.display = (viewId === 'summary-view') ? 'none' : 'block';
+    }
+
     // En móvil, cerrar el menú al seleccionar una opción para mejorar la experiencia
     const navColumn = document.querySelector('.nav-column');
     if (navColumn && navColumn.classList.contains('active')) {
         navColumn.classList.remove('active');
+    }
+
+    if (viewId === 'payments-view') {
+        loadPaymentStatus();
     }
 }
 
@@ -668,12 +526,21 @@ function renderMovements(data) {
         tbody.appendChild(row);
     });
 
-    // Mostrar el balance calculado de los movimientos visibles
+    // CALCULAR BALANCE TOTAL
+    const balance = totalIngresos - totalGastos;
+
+    // 1. Actualizar vista de Resumen (Grande)
     const balanceDisplay = document.getElementById("filteredBalanceDisplay");
     if (balanceDisplay) {
-        const balance = totalIngresos - totalGastos;
-        balanceDisplay.innerText = `Balance: ${formatCurrency(balance)}`;
-        balanceDisplay.style.color = balance >= 0 ? "green" : "red";
+        balanceDisplay.innerText = formatCurrency(balance);
+        balanceDisplay.style.color = balance >= 0 ? "var(--success)" : "var(--danger)";
+    }
+
+    // 2. Actualizar Mini Balance del Header (Pequeño)
+    const miniBalanceAmount = document.getElementById("miniBalanceAmount");
+    if (miniBalanceAmount) {
+        miniBalanceAmount.innerText = formatCurrency(balance);
+        miniBalanceAmount.style.color = balance >= 0 ? "var(--success)" : "var(--danger)";
     }
 }
 
@@ -1363,4 +1230,370 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'slideOut 0.3s ease-in forwards';
         toast.addEventListener('animationend', () => toast.remove());
     }, 3000);
+}
+
+/* ======================
+   TOGGLE DE CONTRASEÑA
+====================== */
+function setupPasswordToggles() {
+    // Selecciona todos los botones para mostrar/ocultar contraseña
+    const toggleButtons = document.querySelectorAll('.toggle-password');
+
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Encuentra el input de contraseña que está justo antes del botón
+            const passwordInput = button.previousElementSibling;
+            if (passwordInput && (passwordInput.type === 'password' || passwordInput.type === 'text')) {
+                // Cambia el tipo de input
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    button.textContent = '🙈'; // Ojo cerrado
+                } else {
+                    passwordInput.type = 'password';
+                    button.textContent = '👁️'; // Ojo abierto
+                }
+            }
+        });
+    });
+}
+
+/* ======================
+   VALIDACIÓN EN TIEMPO REAL
+====================== */
+function setupRegisterValidation() {
+    const emailInput = document.getElementById("registerEmail");
+    const passInput = document.getElementById("registerPassword");
+    // Selecciona el botón de registro usando su atributo onclick
+    const registerBtn = document.querySelector("#register-view button[onclick='register()']");
+
+    if (!emailInput || !passInput || !registerBtn) return;
+
+    // Función auxiliar para crear mensajes de error debajo del input
+    const createMsg = (input, id) => {
+        let msg = document.getElementById(id);
+        if (!msg) {
+            msg = document.createElement("small");
+            msg.id = id;
+            msg.style.display = "none";
+            msg.style.color = "var(--danger)";
+            msg.style.fontSize = "0.8rem";
+            msg.style.marginTop = "-10px";
+            msg.style.marginBottom = "10px";
+            msg.style.fontWeight = "500";
+            input.parentNode.insertBefore(msg, input.nextSibling);
+        }
+        return msg;
+    };
+
+    const emailMsg = createMsg(emailInput, "emailValMsg");
+    const passMsg = createMsg(passInput, "passValMsg");
+
+    const validate = () => {
+        const emailVal = emailInput.value.trim();
+        const passVal = passInput.value.trim();
+
+        // Regex simple para validar email
+        const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal);
+        // Contraseña válida si tiene 6 o más caracteres
+        const passIsValid = passVal.length >= 6;
+
+        // UI Email
+        if (emailVal.length > 0) {
+            if (emailIsValid) {
+                emailInput.classList.add("input-success");
+                emailInput.classList.remove("input-error");
+                emailMsg.style.display = "none";
+            } else {
+                emailInput.classList.add("input-error");
+                emailInput.classList.remove("input-success");
+                emailMsg.innerText = "Ingresa un correo válido";
+                emailMsg.style.display = "block";
+            }
+        } else {
+            emailInput.classList.remove("input-success", "input-error");
+            emailMsg.style.display = "none";
+        }
+
+        // UI Password
+        if (passVal.length > 0) {
+            if (passIsValid) {
+                passInput.classList.add("input-success");
+                passInput.classList.remove("input-error");
+                passMsg.style.display = "none";
+            } else {
+                passInput.classList.add("input-error");
+                passInput.classList.remove("input-success");
+                passMsg.innerText = "Mínimo 6 caracteres";
+                passMsg.style.display = "block";
+            }
+        } else {
+            passInput.classList.remove("input-success", "input-error");
+            passMsg.style.display = "none";
+        }
+
+        // Estado del Botón (Solo activo si todo es válido)
+        registerBtn.disabled = !(emailIsValid && passIsValid);
+        registerBtn.style.opacity = (emailIsValid && passIsValid) ? "1" : "0.6";
+        registerBtn.style.cursor = (emailIsValid && passIsValid) ? "pointer" : "not-allowed";
+    };
+
+    // Escuchar cuando el usuario escribe
+    emailInput.addEventListener("input", validate);
+    passInput.addEventListener("input", validate);
+    
+    // Ejecutar una vez al inicio para establecer el estado inicial del botón
+    validate();
+}
+
+/* ======================
+   ONBOARDING (WIZARD)
+====================== */
+function startOnboarding() {
+    hideAll();
+    adjustMainLayout(false); // Usar layout centrado
+    document.getElementById("onboarding-view").style.display = "block";
+    nextOnboardingStep(1);
+    // Agregar una fila por defecto
+    const list = document.getElementById("recurring-expenses-list");
+    if (list.innerHTML.trim() === "") addRecurringRow();
+}
+
+function nextOnboardingStep(step) {
+    document.getElementById("onboarding-step-1").style.display = "none";
+    document.getElementById("onboarding-step-2").style.display = "none";
+    document.getElementById("onboarding-step-3").style.display = "none";
+    
+    const currentStepDiv = document.getElementById(`onboarding-step-${step}`);
+    if(currentStepDiv) {
+        currentStepDiv.style.display = "block";
+        triggerFadeAnimation(currentStepDiv);
+    }
+}
+
+function addRecurringRow() {
+    const container = document.getElementById("recurring-expenses-list");
+    const div = document.createElement("div");
+    div.className = "grid-2";
+    div.style.marginBottom = "10px";
+    div.style.borderBottom = "1px solid #eee";
+    div.style.paddingBottom = "10px";
+    
+    div.innerHTML = `
+        <input type="text" placeholder="Categoría (Ej: Arriendo)" class="form-control rec-cat">
+        <div class="flex-gap">
+            <input type="number" placeholder="Monto" class="form-control rec-amount">
+            <input type="number" placeholder="Día Pago" class="form-control rec-day" min="1" max="31" style="width: 80px;">
+            <button onclick="this.parentElement.parentElement.remove()" class="btn btn-danger btn-sm" style="height: fit-content; margin-top: 5px;">✖</button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function finishOnboarding() {
+    const income = document.getElementById("setupIncome").value;
+    const payDay = document.getElementById("setupPayDay").value;
+    
+    if (!income || !payDay) {
+        alert("Por favor completa la información del Paso 1");
+        nextOnboardingStep(1);
+        return;
+    }
+
+    const rows = document.querySelectorAll("#recurring-expenses-list .grid-2");
+    const expenses = [];
+    
+    rows.forEach(row => {
+        const cat = row.querySelector(".rec-cat").value;
+        const amount = row.querySelector(".rec-amount").value;
+        const day = row.querySelector(".rec-day").value;
+        
+        if (cat && amount && day) {
+            expenses.push({ categoria: cat, monto: amount, dia: day });
+        }
+    });
+
+    const token = localStorage.getItem("token");
+    fetch(`${API}/save-onboarding`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({
+            ingreso_mensual: income,
+            dia_pago: payDay,
+            gastos_fijos: expenses
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        nextOnboardingStep(3); // Mostrar éxito
+    });
+}
+
+function completeOnboarding() {
+    const email = localStorage.getItem("email");
+    showDashboard(email);
+}
+
+/* ======================
+   ESTADO DE PAGOS
+====================== */
+function loadPaymentStatus() {
+    const token = localStorage.getItem("token");
+    fetch(`${API}/payment-status`, {
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("baseIncomeDisplay").innerText = formatCurrency(data.ingreso_base);
+        
+        // Calcular disponible real (Ingreso Base - Gastos Comprometidos)
+        // Nota: Esto es una proyección. El balance real es Ingresos Reales - Gastos Reales.
+        const realAvailable = data.ingreso_base - data.total_comprometido;
+        document.getElementById("realAvailableDisplay").innerText = formatCurrency(realAvailable);
+
+        const container = document.getElementById("paymentsListContainer");
+        container.innerHTML = "";
+
+        if (data.pagos.length === 0) {
+            container.innerHTML = "<p class='text-muted'>No tienes pagos recurrentes configurados.</p>";
+            return;
+        }
+
+        const today = new Date();
+        const currentDay = today.getDate();
+
+        data.pagos.forEach(pago => {
+            const div = document.createElement("div");
+            div.className = "card";
+            div.style.padding = "15px";
+            div.style.marginBottom = "10px";
+            div.style.display = "flex";
+            div.style.justifyContent = "space-between";
+            div.style.alignItems = "center";
+            div.style.borderLeft = "5px solid #ccc";
+
+            let statusHtml = "";
+            let daysLeft = pago.dia_limite - currentDay;
+            
+            if (pago.pagado) {
+                div.style.borderLeftColor = "var(--success)";
+                statusHtml = `<span style="color: var(--success); font-weight: bold;">✅ PAGADO</span>`;
+            } else {
+                if (daysLeft < 0) {
+                    div.style.borderLeftColor = "var(--danger)";
+                    statusHtml = `<span style="color: var(--danger); font-weight: bold;">⚠ VENCIDO (${Math.abs(daysLeft)} días)</span>`;
+                } else if (daysLeft === 0) {
+                    div.style.borderLeftColor = "orange";
+                    statusHtml = `<span style="color: orange; font-weight: bold;">⚠ HOY</span>`;
+                } else {
+                    div.style.borderLeftColor = "var(--primary)";
+                    statusHtml = `<span style="color: var(--primary); font-weight: bold;">⏳ Faltan ${daysLeft} días</span>`;
+                }
+                
+                // Botón para pagar rápido
+                statusHtml += ` <button onclick="quickPay('${pago.categoria}', ${pago.monto_esperado})" class="btn btn-sm btn-success" style="margin-left:10px;">Pagar</button>`;
+            }
+
+            div.innerHTML = `
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong>${pago.categoria}</strong>
+                        <button onclick="openEditModal(${pago.id}, '${pago.categoria}', ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6;">✏️</button>
+                    </div>
+                    <div class="text-muted">Vence el día ${pago.dia_limite}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.1rem; font-weight: bold;">${formatCurrency(pago.monto_esperado)}</div>
+                    <div style="margin-top: 5px;">${statusHtml}</div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    });
+}
+
+function quickPay(categoria, monto) {
+    // 1. Confirmación de seguridad
+    if (!confirm(`¿Confirmar pago de ${formatCurrency(monto)} para ${categoria}?`)) return;
+
+    const token = localStorage.getItem("token");
+    // 2. Obtener fecha de hoy (YYYY-MM-DD)
+    const today = new Date().toISOString().split('T')[0];
+
+    // 3. Enviar petición directa al backend
+    fetch(`${API}/add-expense`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({
+            tipo: categoria,
+            monto: monto,
+            fecha: today
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast("Pago registrado exitosamente", 'success');
+        loadPaymentStatus(); // Recargar la lista para que aparezca como "PAGADO"
+        loadMovements();     // Actualizar historial en segundo plano
+    })
+    .catch(err => showToast("Error al registrar pago", 'error'));
+}
+
+/* ======================
+   EDICIÓN DE PAGOS RECURRENTES
+====================== */
+function openEditModal(id, categoria, monto, dia) {
+    document.getElementById("editRecId").value = id;
+    document.getElementById("editRecCategoryDisplay").innerText = categoria;
+    document.getElementById("editRecAmount").value = monto;
+    document.getElementById("editRecDay").value = dia;
+    
+    // Mostrar modal (usando flex para centrar gracias al CSS nuevo)
+    document.getElementById("edit-recurring-modal").style.display = "flex";
+}
+
+function saveRecurringEdit() {
+    const id = document.getElementById("editRecId").value;
+    const monto = document.getElementById("editRecAmount").value;
+    const dia = document.getElementById("editRecDay").value;
+    const token = localStorage.getItem("token");
+
+    fetch(`${API}/edit-recurring-expense/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ monto: monto, dia: dia })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast("Actualizado correctamente", 'success');
+        document.getElementById("edit-recurring-modal").style.display = "none";
+        loadPaymentStatus(); // Recargar la lista para ver los cambios
+    });
+}
+
+function deleteRecurringExpense() {
+    const id = document.getElementById("editRecId").value;
+    if (!confirm("¿Estás seguro de que quieres eliminar este pago recurrente?")) return;
+
+    const token = localStorage.getItem("token");
+    fetch(`${API}/delete-recurring-expense/${id}`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast(data.message, 'success');
+        document.getElementById("edit-recurring-modal").style.display = "none";
+        loadPaymentStatus(); // Actualizar la lista
+    });
 }

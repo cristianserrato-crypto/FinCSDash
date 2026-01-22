@@ -9,7 +9,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- El título que aparece en la pestaña del navegador -->
     <title>FinCSDash</title>
-
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Estilos -->
     <!-- Conecta este archivo con la hoja de estilos CSS para que se vea bonito -->
     <link rel="stylesheet" href="css/styles.css">
@@ -17,8 +20,6 @@
     <!-- Google Identity -->
     <!-- Carga la librería de Google para poder iniciar sesión con Gmail -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Carga tu archivo de autenticación (si tienes lógica extra ahí) -->
-    <script src="js/auth.js" defer></script>
 
 
     <!-- Lógica -->
@@ -43,8 +44,11 @@
 
     <!-- Campo de texto para escribir el email -->
     <input type="email" id="loginEmail" placeholder="Email">
-    <!-- Campo para la contraseña (se ven puntitos en lugar de letras) -->
-    <input type="password" id="loginPassword" placeholder="Contraseña">
+    <!-- Contenedor para el campo de contraseña y el botón de ojo -->
+    <div class="password-wrapper">
+        <input type="password" id="loginPassword" placeholder="Contraseña">
+        <button type="button" class="toggle-password">👁️</button>
+    </div>
 
     <!-- Botón que al hacer clic ejecuta la función 'login()' de JavaScript -->
     <button onclick="login()">Ingresar</button>
@@ -65,7 +69,11 @@
     <h2>Registro</h2>
 
     <input type="email" id="registerEmail" placeholder="Email">
-    <input type="password" id="registerPassword" placeholder="Contraseña">
+    <!-- Contenedor para el campo de contraseña y el botón de ojo -->
+    <div class="password-wrapper">
+        <input type="password" id="registerPassword" placeholder="Contraseña">
+        <button type="button" class="toggle-password">👁️</button>
+    </div>
 
     <!-- Ejecuta la función 'register()' al hacer clic -->
     <button onclick="register()">Registrar</button>
@@ -94,6 +102,54 @@
     <p id="resendMsg"></p>
 </section>
 
+<!-- ONBOARDING (CONFIGURACIÓN INICIAL) -->
+<section id="onboarding-view" style="display:none;">
+    <!-- Paso 1: Ingresos -->
+    <div id="onboarding-step-1">
+        <h2>👋 ¡Bienvenido!</h2>
+        <p>Configuremos tus finanzas en 3 pasos.</p>
+        
+        <label class="form-label">¿Cuál es tu ingreso mensual aproximado?</label>
+        <input type="number" id="setupIncome" placeholder="$ 0.00" class="form-control">
+        
+        <label class="form-label">¿Qué día del mes recibes tu pago?</label>
+        <input type="number" id="setupPayDay" placeholder="Ej: 15" min="1" max="31" class="form-control">
+        
+        <button onclick="nextOnboardingStep(2)" class="btn btn-primary w-100" style="margin-top:20px;">Siguiente ➡</button>
+    </div>
+
+    <!-- Paso 2: Gastos Fijos -->
+    <div id="onboarding-step-2" style="display:none;">
+        <h2>📅 Gastos Fijos</h2>
+        <p>Registra tus pagos recurrentes (Arriendo, Internet, etc.) y qué día debes pagarlos.</p>
+        
+        <div id="recurring-expenses-list">
+            <!-- Aquí se agregarán los inputs dinámicamente -->
+        </div>
+        
+        <button onclick="addRecurringRow()" class="btn btn-secondary btn-sm w-100" style="margin-bottom:15px;">＋ Agregar otro gasto</button>
+        
+        <div class="flex-gap">
+            <button onclick="nextOnboardingStep(1)" class="btn btn-secondary">⬅ Atrás</button>
+            <button onclick="finishOnboarding()" class="btn btn-success w-100">Finalizar ✅</button>
+        </div>
+    </div>
+
+    <!-- Paso 3: Éxito -->
+    <div id="onboarding-step-3" style="display:none; text-align:center;">
+        <h2 style="color: var(--success);">¡Todo listo! 🎉</h2>
+        <p>Hemos configurado tu perfil.</p>
+        <div style="background: #e6fffa; padding: 15px; border-radius: 8px; border: 1px solid #b2f5ea; margin: 20px 0;">
+            <strong>🔔 Notificaciones Activadas</strong>
+            <p style="font-size: 0.9rem; margin-top: 5px;">
+                Te avisaremos en los días programados para que no olvides realizar tus pagos pendientes.
+            </p>
+        </div>
+        <p>Ahora verás el estado real de tus finanzas.</p>
+        <button onclick="completeOnboarding()" class="btn btn-primary w-100">Ir al Dashboard</button>
+    </div>
+</section>
+
 <!-- DASHBOARD -->
 <!-- Sección principal del usuario, inicia oculta hasta que se loguee -->
 <section id="dashboard-view" style="display:none;">
@@ -105,6 +161,28 @@
 </section>
 
 </main>
+
+<!-- MODAL EDITAR GASTO RECURRENTE -->
+<div id="edit-recurring-modal" class="modal-overlay">
+    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
+        <h3 style="margin-bottom: 15px;">✏️ Editar Pago</h3>
+        <p id="editRecCategoryDisplay" class="text-muted" style="margin-bottom: 20px;"></p>
+        
+        <input type="hidden" id="editRecId">
+        
+        <label class="form-label">Nuevo Monto</label>
+        <input type="number" id="editRecAmount" class="form-control form-group">
+        
+        <label class="form-label">Día de Pago (1-31)</label>
+        <input type="number" id="editRecDay" class="form-control form-group" min="1" max="31">
+        
+        <div class="flex-gap">
+            <button onclick="deleteRecurringExpense()" class="btn btn-danger" style="width: auto;" title="Eliminar">🗑️</button>
+            <button onclick="document.getElementById('edit-recurring-modal').style.display='none'" class="btn btn-secondary">Cancelar</button>
+            <button onclick="saveRecurringEdit()" class="btn btn-primary">Guardar</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

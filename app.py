@@ -281,6 +281,142 @@ def google_login():
 
 
 # =========================
+# ONBOARDING & ESTADO
+# =========================
+@app.route("/check-onboarding", methods=["GET"])
+@jwt_required()
+def check_onboarding():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    # Verificamos si el usuario ya configuró su ingreso mensual (indicador de que completó el onboarding)
+    cursor.execute("SELECT ingreso_mensual FROM usuarios WHERE email = ?", (email,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    needs_onboarding = True
+    if row and row[0] and row[0] > 0:
+        needs_onboarding = False
+        
+    return jsonify({"needs_onboarding": needs_onboarding}), 200
+
+@app.route("/save-onboarding", methods=["POST"])
+@jwt_required()
+def save_onboarding():
+    data = request.json
+    email = get_jwt_identity()
+    
+    ingreso = data.get("ingreso_mensual")
+    dia_pago = data.get("dia_pago")
+    gastos_fijos = data.get("gastos_fijos") # Lista de objetos {categoria, monto, dia}
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+
+    # 1. Actualizar Usuario
+    cursor.execute("UPDATE usuarios SET ingreso_mensual = ?, dia_pago = ? WHERE id = ?", (ingreso, dia_pago, user_id))
+
+    # 2. Guardar Gastos Recurrentes
+    # Primero limpiamos los anteriores si existieran para evitar duplicados en re-configuración
+    cursor.execute("DELETE FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+    
+    for gasto in gastos_fijos:
+        cursor.execute("""
+            INSERT INTO gastos_recurrentes (usuario_id, categoria, monto, dia_limite)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, gasto['categoria'], gasto['monto'], gasto['dia']))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Configuración guardada correctamente"}), 200
+
+@app.route("/payment-status", methods=["GET"])
+@jwt_required()
+def payment_status():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    user_id = user[0]
+    ingreso_base = user[1] or 0
+
+    # Obtener gastos recurrentes configurados
+    cursor.execute("SELECT id, categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+    recurrentes = cursor.fetchall()
+
+    # Obtener gastos REALES hechos este mes
+    mes_actual = datetime.now().strftime("%Y-%m")
+    cursor.execute("""
+        SELECT tipo, SUM(monto) FROM gastos 
+        WHERE usuario_id = ? AND fecha LIKE ?
+        GROUP BY tipo
+    """, (user_id, f"{mes_actual}%"))
+    gastos_reales = {row[0]: row[1] for row in cursor.fetchall()}
+
+    estado_pagos = []
+    total_comprometido = 0
+
+    for id_rec, cat, monto_esperado, dia_limite in recurrentes:
+        total_comprometido += monto_esperado
+        pagado = cat in gastos_reales and gastos_reales[cat] >= (monto_esperado * 0.9) # Margen del 10%
+        estado_pagos.append({
+            "id": id_rec,
+            "categoria": cat,
+            "monto_esperado": monto_esperado,
+            "dia_limite": dia_limite,
+            "pagado": pagado
+        })
+
+    conn.close()
+    return jsonify({"ingreso_base": ingreso_base, "pagos": estado_pagos, "total_comprometido": total_comprometido}), 200
+
+@app.route("/edit-recurring-expense/<int:id>", methods=["PUT"])
+@jwt_required()
+def edit_recurring_expense(id):
+    data = request.json
+    email = get_jwt_identity()
+    monto = data.get("monto")
+    dia = data.get("dia")
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    # Verificar que el usuario sea dueño del registro
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+
+    cursor.execute("UPDATE gastos_recurrentes SET monto = ?, dia_limite = ? WHERE id = ? AND usuario_id = ?", (monto, dia, id, user_id))
+    
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({"message": "No se pudo actualizar. Verifica permisos."}), 404
+        
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Pago recurrente actualizado"}), 200
+
+@app.route("/delete-recurring-expense/<int:id>", methods=["DELETE"])
+@jwt_required()
+def delete_recurring_expense(id):
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+
+    cursor.execute("DELETE FROM gastos_recurrentes WHERE id = ? AND usuario_id = ?", (id, user_id))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Gasto recurrente eliminado"}), 200
+
+# =========================
 # OBTENER CATEGORÍAS
 # =========================
 @app.route("/categories", methods=["GET"])

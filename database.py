@@ -51,6 +51,14 @@ def crear_tablas():
     if 'codigo_verificacion' not in columnas_existentes:
         print("MIGRANDO: Agregando columna 'codigo_verificacion' a la tabla 'usuarios'.")
         cursor.execute("ALTER TABLE usuarios ADD COLUMN codigo_verificacion TEXT")
+
+    if 'ingreso_mensual' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'ingreso_mensual' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN ingreso_mensual REAL DEFAULT 0")
+
+    if 'dia_pago' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'dia_pago' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN dia_pago INTEGER DEFAULT 1")
     # ---------------------------------------------------------------
 
     # Tabla ingresos
@@ -83,6 +91,18 @@ def crear_tablas():
             usuario_id INTEGER DEFAULT 0,
             nombre TEXT NOT NULL,
             UNIQUE(usuario_id, nombre)
+        )
+    """)
+
+    # Tabla gastos recurrentes (Configuración inicial)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gastos_recurrentes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER,
+            categoria TEXT,
+            monto REAL,
+            dia_limite INTEGER,
+            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)
 
