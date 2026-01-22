@@ -257,8 +257,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // INICIAR VALIDACIÓN DE FORMULARIOS
     setupRegisterValidation();
-    // INICIAR TOGGLE DE CONTRASEÑA
-    setupPasswordToggles();
 });
 
 /* ======================
@@ -1301,31 +1299,6 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'slideOut 0.3s ease-in forwards';
         toast.addEventListener('animationend', () => toast.remove());
     }, 3000);
-}
-
-/* ======================
-   TOGGLE DE CONTRASEÑA
-====================== */
-function setupPasswordToggles() {
-    // Selecciona todos los botones para mostrar/ocultar contraseña
-    const toggleButtons = document.querySelectorAll('.toggle-password');
-
-    toggleButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            // Encuentra el input de contraseña que está justo antes del botón
-            const passwordInput = button.previousElementSibling;
-            if (passwordInput && (passwordInput.type === 'password' || passwordInput.type === 'text')) {
-                // Cambia el tipo de input
-                if (passwordInput.type === 'password') {
-                    passwordInput.type = 'text';
-                    button.textContent = '🙈'; // Ojo cerrado
-                } else {
-                    passwordInput.type = 'password';
-                    button.textContent = '👁️'; // Ojo abierto
-                }
-            }
-        });
-    });
 }
 
 /* ======================
