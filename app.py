@@ -363,8 +363,8 @@ def payment_status():
     """, (user_id, f"{mes_actual}%"))
     gastos_reales = {row[0]: row[1] for row in cursor.fetchall()}
 
-    # Verificar si ya se registró un ingreso este mes
-    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ?", (user_id, f"{mes_actual}%"))
+    # Verificar si ya se registró un ingreso este mes (Salario específicamente)
+    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ? AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
     income_confirmed_this_month = cursor.fetchone() is not None
 
     estado_pagos = []
@@ -444,14 +444,14 @@ def confirm_main_income():
 
     # 2. Verificar que no se haya confirmado ya este mes para evitar duplicados
     mes_actual = datetime.now().strftime("%Y-%m")
-    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ?", (user_id, f"{mes_actual}%"))
+    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ? AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
     if cursor.fetchone():
         conn.close()
         return jsonify({"message": "El ingreso de este mes ya fue registrado."}), 400
 
     # 3. Registrar el ingreso
     fecha_hoy = datetime.now().date().isoformat()
-    cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha) VALUES (?, ?, ?)", (user_id, ingreso_base, fecha_hoy))
+    cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (?, ?, ?, 'Salario')", (user_id, ingreso_base, fecha_hoy))
 
     conn.commit()
     conn.close()
@@ -560,6 +560,7 @@ def add_income():
     data = request.json
     email = get_jwt_identity() # Obtenemos el email del token seguro, no del JSON
     monto = data.get("monto")
+    categoria = data.get("categoria", "Ingreso") # Obtener categoría o usar default
 
     try:
         monto = float(monto)
@@ -589,9 +590,9 @@ def add_income():
     usuario_id = user[0]
 
     cursor.execute("""
-        INSERT INTO ingresos (usuario_id, monto, fecha)
-        VALUES (?, ?, ?)
-    """, (usuario_id, monto, fecha))
+        INSERT INTO ingresos (usuario_id, monto, fecha, categoria)
+        VALUES (?, ?, ?, ?)
+    """, (usuario_id, monto, fecha, categoria))
 
     conn.commit()
     conn.close()
@@ -892,7 +893,7 @@ def get_movements():
     year = request.args.get("year")
     
     # Base de las consultas
-    query_ingresos = "SELECT id, monto, fecha FROM ingresos WHERE usuario_id = ?"
+    query_ingresos = "SELECT id, monto, fecha, categoria FROM ingresos WHERE usuario_id = ?"
     query_gastos = "SELECT id, tipo, monto, fecha FROM gastos WHERE usuario_id = ?"
     params = [usuario_id]
 
@@ -904,7 +905,7 @@ def get_movements():
 
     # Obtener Ingresos
     cursor.execute(query_ingresos, tuple(params))
-    ingresos = [{"id": r[0], "tipo": "Ingreso", "categoria": "Ingreso", "monto": r[1], "fecha": r[2]} for r in cursor.fetchall()]
+    ingresos = [{"id": r[0], "tipo": "Ingreso", "categoria": r[3], "monto": r[1], "fecha": r[2]} for r in cursor.fetchall()]
 
     # Obtener Gastos
     cursor.execute(query_gastos, tuple(params))

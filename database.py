@@ -72,6 +72,7 @@ def crear_tablas():
             usuario_id INTEGER,
             monto REAL,
             fecha TEXT,
+            categoria TEXT,
             FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)
@@ -127,6 +128,13 @@ def crear_tablas():
     categorias_default = ["Salario", "Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
     for cat in categorias_default:
         cursor.execute("INSERT OR IGNORE INTO categorias (usuario_id, nombre) VALUES (0, ?)", (cat,))
+
+    # --- MIGRACIÓN PARA INGRESOS ---
+    cursor.execute("PRAGMA table_info(ingresos)")
+    cols_ingresos = [col[1] for col in cursor.fetchall()]
+    if 'categoria' not in cols_ingresos:
+        print("MIGRANDO: Agregando columna 'categoria' a la tabla 'ingresos'.")
+        cursor.execute("ALTER TABLE ingresos ADD COLUMN categoria TEXT DEFAULT 'Ingreso'")
 
     # 👉 COMMIT ANTES DE CERRAR
     conn.commit()

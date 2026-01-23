@@ -667,7 +667,8 @@ function renderChart(data) {
     
     const palette = isDarkMode ? paletteDark : paletteLight;
     const incomeColor = isDarkMode ? '#06d6a0' : '#2ec4b6'; // Verde más brillante en oscuro
-    const bgColors = labels.map((cat, i) => currentChartType === "Ingreso" ? incomeColor : palette[i % palette.length]);
+    // Usar la paleta de colores también para ingresos para poder discriminarlos
+    const bgColors = labels.map((cat, i) => palette[i % palette.length]);
     
     // El borde separa los segmentos: blanco en modo claro, gris oscuro en modo oscuro
     const borderColors = labels.map(() => isDarkMode ? '#1e1e1e' : '#ffffff');
@@ -935,6 +936,7 @@ function addIncome() {
     const token = localStorage.getItem("token");
     const monto = document.getElementById("expenseAmount").value;
     const fecha = document.getElementById("expenseDate").value;
+    const categoria = document.getElementById("categoriaSelect").value;
 
     if (!monto || !fecha) {
         return showToast("Completa el Monto y la Fecha", 'error');
@@ -948,7 +950,8 @@ function addIncome() {
         },
         body: JSON.stringify({
             monto: monto,
-            fecha: fecha
+            fecha: fecha,
+            categoria: categoria
         })
     })
     .then(res => res.json())

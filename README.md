@@ -18,6 +18,7 @@ FinCSDash es una aplicación web de gestión financiera personal diseñada para 
     *   Tabla detallada de movimientos con ordenamiento.
     *   Filtrado por mes y año.
     *   **Exportación de datos:** Descarga de reportes en CSV (Excel) y PDF.
+    *   **Exportación de datos:** Descarga de reportes en CSV (Excel) y PDF con formato de moneda local.
 *   **Interfaz Moderna:**
     *   Diseño responsivo (adaptable a móviles y escritorio).
     *   **Modo Oscuro** integrado.
