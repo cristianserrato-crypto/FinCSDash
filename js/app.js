@@ -106,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <button id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="btn btn-secondary w-100">Resumen</button>
                                 <button id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="btn btn-secondary w-100">Análisis</button>
                                 <button id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="btn btn-secondary w-100">Estado Pagos</button>
+                                <button id="nav-btn-savings" onclick="showDashboardView('savings-view')" class="btn btn-secondary w-100">Metas Ahorro</button>
                                 <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
                             </div>
                         </div>
@@ -132,6 +133,11 @@ document.addEventListener("DOMContentLoaded", () => {
                                         <label class="form-label">Fecha</label>
                                         <input type="date" id="expenseDate" class="form-control">
                                     </div>
+                                </div>
+
+                                <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <input type="checkbox" id="isRecurringInput" style="width: 18px; height: 18px; cursor: pointer;">
+                                    <label for="isRecurringInput" style="margin: 0; cursor: pointer; font-size: 0.9rem;">🔁 Marcar como pago mensual recurrente</label>
                                 </div>
 
                                 <div class="flex-gap" style="margin-bottom: 25px;">
@@ -189,6 +195,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div id="history-view" class="dashboard-view" style="display: none;">
                             <div class="card">
                                 <h3 style="margin-bottom: 20px;">Historial de Movimientos</h3>
+                                <div style="margin-bottom: 15px;">
+                                    <input type="checkbox" id="filterRecurringHistory" onchange="renderMovements(currentMovements)" style="width: auto; margin-right: 8px;">
+                                    <label for="filterRecurringHistory" style="display: inline; cursor: pointer;">Ver solo gastos recurrentes</label>
+                                </div>
                                 <div class="table-container">
                                 <table>
                                     <thead>
@@ -224,6 +234,17 @@ document.addEventListener("DOMContentLoaded", () => {
                                     </div>
                                 </div>
                                 <div id="paymentsListContainer"></div>
+                            </div>
+                        </div>
+
+                        <!-- VISTA METAS DE AHORRO -->
+                        <div id="savings-view" class="dashboard-view" style="display: none;">
+                            <div class="card">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                    <h4>🎯 Metas de Ahorro</h4>
+                                    <button onclick="openAddSavingsModal()" class="btn btn-primary btn-sm">＋ Nueva Meta</button>
+                                </div>
+                                <div id="savingsListContainer"></div>
                             </div>
                         </div>
                     </div>
@@ -526,6 +547,13 @@ function renderMovements(data) {
 
     tbody.innerHTML = ""; // Limpiar tabla actual
     
+    // --- FILTRO DE RECURRENTES ---
+    const filterCheckbox = document.getElementById("filterRecurringHistory");
+    if (filterCheckbox && filterCheckbox.checked) {
+        // Filtramos solo los que tengan es_recurrente = 1 (true)
+        data = data.filter(m => m.es_recurrente);
+    }
+
     // Variables para calcular totales
     let totalIngresos = 0;
     let totalGastos = 0;
@@ -549,9 +577,12 @@ function renderMovements(data) {
         const color = mov.tipo === "Ingreso" ? "green" : "red";
         const signo = mov.tipo === "Ingreso" ? "+" : "-";
         
+        // Icono indicador de recurrente
+        const iconRecurrente = mov.es_recurrente ? '<span title="Gasto Recurrente">🔁</span>' : '';
+
         row.innerHTML = `
             <td>${formattedDate}</td>
-            <td>${mov.categoria}</td>
+            <td>${mov.categoria} ${iconRecurrente}</td>
             <td style="color: ${color}; font-weight: bold;">
                 ${signo} ${formatCurrency(mov.monto)}
             </td>
@@ -896,6 +927,7 @@ function addExpense() {
     const tipo = document.getElementById("categoriaSelect").value;
     const monto = document.getElementById("expenseAmount").value;
     const fecha = document.getElementById("expenseDate").value;
+    const isRecurring = document.getElementById("isRecurringInput").checked;
 
     if (!tipo || !monto || !fecha) {
         return showToast("Completa todos los campos", 'error');
@@ -911,18 +943,37 @@ function addExpense() {
         body: JSON.stringify({
             tipo: tipo,
             monto: monto,
-            fecha: fecha
+            fecha: fecha,
+            es_recurrente: isRecurring // Enviamos la marca al backend
         })
     })
     .then(res => res.json())
     .then(data => {
-        alert(data.message);
-        showToast(data.message, 'success');
-        if (data.message.includes("agregado")) {
-            // Limpiar el formulario si fue exitoso
-            document.getElementById("expenseAmount").value = "";
-            document.getElementById("expenseDate").value = "";
-            loadMovements(); // Actualizar tabla
+        // Si se marcó como recurrente, lo guardamos también en la lista de pagos fijos
+        if (isRecurring) {
+            const day = parseInt(fecha.split('-')[2]); // Extraer el día de la fecha (YYYY-MM-DD)
+            
+            fetch(`${API}/add-recurring-expense`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({ categoria: tipo, monto: monto, dia: day })
+            })
+            .then(() => {
+                showToast("Gasto registrado y programado mensualmente", 'success');
+                document.getElementById("expenseAmount").value = "";
+                document.getElementById("isRecurringInput").checked = false; // Resetear checkbox
+                loadMovements();
+                loadPaymentStatus(); // Actualizar la vista de pagos
+            });
+        } else {
+            showToast(data.message, 'success');
+            if (data.message.includes("agregado")) {
+                document.getElementById("expenseAmount").value = "";
+                loadMovements(); 
+            }
         }
     })
     .catch(err => console.error(err));
@@ -1620,7 +1671,8 @@ function quickPay(categoria, monto) {
         body: JSON.stringify({
             tipo: categoria,
             monto: monto,
-            fecha: today
+            fecha: today,
+            es_recurrente: true // Los pagos rápidos siempre son recurrentes
         })
     })
     .then(res => res.json())

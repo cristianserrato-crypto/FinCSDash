@@ -425,6 +425,26 @@ def delete_recurring_expense(id):
     conn.close()
     return jsonify({"message": "Gasto recurrente eliminado"}), 200
 
+@app.route("/add-recurring-expense", methods=["POST"])
+@jwt_required()
+def add_recurring_expense():
+    data = request.json
+    email = get_jwt_identity()
+    
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user_id = cursor.fetchone()[0]
+    
+    cursor.execute("""
+        INSERT INTO gastos_recurrentes (usuario_id, categoria, monto, dia_limite)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, data['categoria'], data['monto'], data['dia']))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Gasto recurrente agregado"}), 201
+
 @app.route("/confirm-main-income", methods=["POST"])
 @jwt_required()
 def confirm_main_income():
@@ -610,6 +630,7 @@ def add_expense():
     email = get_jwt_identity()
     tipo = data.get("tipo")
     monto = data.get("monto")
+    es_recurrente = 1 if data.get("es_recurrente") else 0
 
     try:
         monto = float(monto)
@@ -639,9 +660,9 @@ def add_expense():
     usuario_id = user[0]
 
     cursor.execute("""
-        INSERT INTO gastos (usuario_id, tipo, monto, fecha)
-        VALUES (?, ?, ?, ?)
-    """, (usuario_id, tipo, monto, fecha))
+        INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente)
+        VALUES (?, ?, ?, ?, ?)
+    """, (usuario_id, tipo, monto, fecha, es_recurrente))
 
     conn.commit()
     conn.close()
@@ -894,7 +915,7 @@ def get_movements():
     
     # Base de las consultas
     query_ingresos = "SELECT id, monto, fecha, categoria FROM ingresos WHERE usuario_id = ?"
-    query_gastos = "SELECT id, tipo, monto, fecha FROM gastos WHERE usuario_id = ?"
+    query_gastos = "SELECT id, tipo, monto, fecha, es_recurrente FROM gastos WHERE usuario_id = ?"
     params = [usuario_id]
 
     if month and year:
@@ -909,7 +930,7 @@ def get_movements():
 
     # Obtener Gastos
     cursor.execute(query_gastos, tuple(params))
-    gastos = [{"id": r[0], "tipo": "Gasto", "categoria": r[1], "monto": r[2], "fecha": r[3]} for r in cursor.fetchall()]
+    gastos = [{"id": r[0], "tipo": "Gasto", "categoria": r[1], "monto": r[2], "fecha": r[3], "es_recurrente": r[4]} for r in cursor.fetchall()]
 
     conn.close()
 
