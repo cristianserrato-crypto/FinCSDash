@@ -2227,18 +2227,14 @@ function saveSavingsGoal() {
     })
     .then(res => res.json())
     .then(data => {
-.the    n(res => res.json())
-    .then(data => {
         showToast("Meta creada", "success");
         document.getElementById("add-savings-modal").style.display = "none";
         loadSavingsGoals();
+    });
+}
 
 function openUpdateSavingsModal(id, nombre, actual, moneda) {
     document.getElementById("updateSavingsId").value = id;
-    document.getElementById("updateSavingsCurrent").value = actual;
-    document.getElementById("updateSavingsNameDisplay").innerText = nombre;
-    document.getElementById("addSavingsAmount").value = "";
-= id;
     document.getElementById("updateSavingsCurrent").value = actual;
     document.getElementById("updateSavingsNameDisplay").innerText = nombre;
     document.getElementById("addSavingsAmount").value = "";
