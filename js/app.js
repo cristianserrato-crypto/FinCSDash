@@ -73,11 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             <span id="miniBalanceAmount" style="font-weight: 700; font-size: 1rem;">--</span>
                         </div>
 
-                        <button onclick="toggleDarkMode()" class="btn btn-secondary btn-sm" style="margin-right: 10px;">🌙</button>
-                        
-                        <!-- Botón Salir (Restaurado) -->
-                        <button onclick="logout()" class="btn btn-danger btn-sm" style="margin-right: 10px;">Salir</button>
-
                         <!-- PERFIL DE USUARIO -->
                         <div class="profile-container">
                             <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar" style="cursor: pointer;">
