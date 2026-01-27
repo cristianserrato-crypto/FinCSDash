@@ -143,6 +143,13 @@ def crear_tablas():
         print("MIGRANDO: Agregando columna 'es_recurrente' a la tabla 'gastos'.")
         cursor.execute("ALTER TABLE gastos ADD COLUMN es_recurrente INTEGER DEFAULT 0")
 
+    # --- MIGRACIÓN PARA METAS DE AHORRO ---
+    cursor.execute("PRAGMA table_info(metas_ahorro)")
+    cols_metas = [col[1] for col in cursor.fetchall()]
+    if 'moneda' not in cols_metas:
+        print("MIGRANDO: Agregando columna 'moneda' a la tabla 'metas_ahorro'.")
+        cursor.execute("ALTER TABLE metas_ahorro ADD COLUMN moneda TEXT DEFAULT 'COP'")
+
     # 👉 COMMIT ANTES DE CERRAR
     conn.commit()
     conn.close()

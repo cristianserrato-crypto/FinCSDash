@@ -495,7 +495,6 @@ function renderChatMenuOptions() {
     // Definición de las opciones del menú
     const options = [
         { label: "💰 Ver Saldo", command: "Saldo" },
-        { label: "💵 Disponible", command: "Disponible" },
         { label: "🏆 Mayor Gasto", command: "Mayor gasto" },
         { label: "🐷 Ahorrado", command: "Ahorrado" },
         { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
@@ -1798,16 +1797,25 @@ function finishOnboarding() {
 
     const rows = document.querySelectorAll("#recurring-expenses-list .grid-2");
     const expenses = [];
+    let errorFound = false;
     
     rows.forEach(row => {
         const cat = row.querySelector(".rec-cat").value;
         const amount = row.querySelector(".rec-amount").value;
         const day = row.querySelector(".rec-day").value;
         
+        // Validación estricta: Todos los campos deben tener valor
         if (cat && amount && day) {
             expenses.push({ categoria: cat, monto: amount, dia: day });
+        } else {
+            errorFound = true;
         }
     });
+
+    if (errorFound) {
+        alert("Por favor completa todos los campos (Categoría, Monto y Día) de los gastos agregados.");
+        return;
+    }
 
     const token = localStorage.getItem("token");
     fetch(`${API}/save-onboarding`, {
@@ -2225,11 +2233,18 @@ function saveSavingsGoal() {
         },
         body: JSON.stringify({ nombre, objetivo, fecha, moneda })
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) throw new Error("Error al crear la meta. Verifica los datos.");
+        return res.json();
+    })
     .then(data => {
         showToast("Meta creada", "success");
         document.getElementById("add-savings-modal").style.display = "none";
         loadSavingsGoals();
+    })
+    .catch(err => {
+        console.error(err);
+        showToast(err.message, "error");
     });
 }
 

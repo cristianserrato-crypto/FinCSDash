@@ -1,4 +1,5 @@
 from selenium import webdriver
+import os
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
@@ -18,6 +19,12 @@ def ejecutar_bot_selenium():
     options.add_argument("--disable-dev-shm-usage")
     # Evitar que el navegador se identifique como automatizado
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+    # --- CONFIGURACIÓN PARA RENDER ---
+    # Ruta donde se instala Chrome mediante render-build.sh
+    chrome_bin = "/opt/render/project/.render/chrome/opt/google/chrome/google-chrome"
+    if os.path.exists(chrome_bin):
+        options.binary_location = chrome_bin
 
     # Inicializa el driver automáticamente (descarga la versión correcta de Chrome)
     service = Service(ChromeDriverManager().install())
