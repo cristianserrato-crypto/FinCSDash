@@ -17,8 +17,16 @@ FinCSDash es una aplicación web de gestión financiera personal diseñada para 
 *   **Historial y Reportes:**
     *   Tabla detallada de movimientos con ordenamiento.
     *   Filtrado por mes y año.
-    *   **Exportación de datos:** Descarga de reportes en CSV (Excel) y PDF.
     *   **Exportación de datos:** Descarga de reportes en CSV (Excel) y PDF con formato de moneda local.
+*   **Asistente Virtual (Chatbot):**
+    *   Registro de ingresos y gastos mediante lenguaje natural (ej: "Gasté 20000 en comida").
+    *   Consultas rápidas de saldo, dinero disponible, total ahorrado y categoría con mayor gasto.
+    *   Permite eliminar la última transacción registrada.
+    *   Menú interactivo con acciones frecuentes y formulario de "Gasto Rápido".
+    *   Alertas proactivas si los gastos superan el 80% de los ingresos.
+*   **Automatización y Datos Externos:**
+    *   Integración de un bot (Selenium) para extraer el precio del dólar (TRM) en tiempo real.
+    *   Soporte para metas de ahorro en Dólares (USD).
 *   **Interfaz Moderna:**
     *   Diseño responsivo (adaptable a móviles y escritorio).
     *   **Modo Oscuro** integrado.
@@ -37,6 +45,7 @@ FinCSDash es una aplicación web de gestión financiera personal diseñada para 
 *   **Flask-JWT-Extended:** Manejo de autenticación segura mediante Tokens (JWT).
 *   **FPDF:** Generación de reportes en PDF.
 *   **Gmail API:** Servicio para envío de correos de verificación (requiere `gmail_service.py`).
+*   **Selenium & Webdriver-Manager:** Automatización de navegador para extracción de datos (web scraping).
 
 ## Instalación y Ejecución
 
@@ -45,7 +54,7 @@ FinCSDash es una aplicación web de gestión financiera personal diseñada para 
 Asegúrate de tener Python instalado. Navega a la carpeta del proyecto e instala las dependencias necesarias:
 
 ```bash
-pip install flask flask-cors flask-jwt-extended google-auth google-auth-oauthlib requests fpdf
+pip install flask flask-cors flask-jwt-extended google-auth google-auth-oauthlib requests fpdf selenium webdriver-manager
 ```
 
 Ejecuta el servidor:

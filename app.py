@@ -19,6 +19,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 import io
 from fpdf import FPDF
 import os
+import re
 
 # Google Login
 
@@ -31,6 +32,8 @@ from database import conectar_db, crear_tablas
 # Envío de correos (Gmail API)
 from gmail_service import enviar_correo
 
+# Importar el Bot
+from bot import ejecutar_bot_selenium
 
 # =========================
 # CONFIGURACIÓN APP
@@ -802,8 +805,10 @@ def get_savings_goals():
     cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
     user_id = cursor.fetchone()[0]
 
-    cursor.execute("SELECT id, nombre, monto_objetivo, monto_actual, fecha_limite FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
-    metas = [{"id": r[0], "nombre": r[1], "objetivo": r[2], "actual": r[3], "fecha": r[4]} for r in cursor.fetchall()]
+    # MODIFICADO: Añadir la columna 'moneda'
+    cursor.execute("SELECT id, nombre, monto_objetivo, monto_actual, fecha_limite, moneda FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
+    # MODIFICADO: Añadir 'moneda' al diccionario
+    metas = [{"id": r[0], "nombre": r[1], "objetivo": r[2], "actual": r[3], "fecha": r[4], "moneda": r[5]} for r in cursor.fetchall()]
     
     conn.close()
     return jsonify(metas), 200
@@ -819,10 +824,14 @@ def add_savings_goal():
     cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
     user_id = cursor.fetchone()[0]
     
+    # MODIFICADO: Obtener la moneda del request, con 'COP' como default
+    moneda = data.get('moneda', 'COP')
+
+    # MODIFICADO: Añadir 'moneda' al INSERT
     cursor.execute("""
-        INSERT INTO metas_ahorro (usuario_id, nombre, monto_objetivo, monto_actual, fecha_limite)
-        VALUES (?, ?, ?, ?, ?)
-    """, (user_id, data['nombre'], data['objetivo'], data.get('actual', 0), data['fecha']))
+        INSERT INTO metas_ahorro (usuario_id, nombre, monto_objetivo, monto_actual, fecha_limite, moneda)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, data['nombre'], data['objetivo'], data.get('actual', 0), data['fecha'], moneda))
     
     conn.commit()
     conn.close()
@@ -1036,6 +1045,165 @@ def export_pdf():
         print(f"ERROR PDF: {e}")
         return jsonify({"message": "Error generando PDF", "error": str(e)}), 500
 
+
+# =========================
+# RUTAS DEL BOT
+# =========================
+@app.route("/run-bot", methods=["POST"])
+@jwt_required()
+def run_bot():
+    try:
+        # Ejecutar la lógica de Selenium
+        resultado = ejecutar_bot_selenium()
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"message": "Error interno del bot", "error": str(e)}), 500
+
+# =========================
+# CHATBOT (COMANDOS)
+# =========================
+@app.route("/chat", methods=["POST"])
+@jwt_required()
+def chat_bot():
+    data = request.json
+    message = data.get("message", "").lower()
+    email = get_jwt_identity()
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"response": "Usuario no encontrado."}), 404
+    user_id = user[0]
+
+    response_text = "No entendí. Prueba: 'Gasto de 20000 en comida', 'Saldo', 'Disponible', 'Mayor gasto', 'Ahorrado' o 'Elimina el último gasto'."
+
+    # 1. CONSULTAR SALDO / DISPONIBLE
+    if "saldo" in message or "balance" in message or "disponible" in message or "me queda" in message or "sobra" in message:
+        cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (user_id,))
+        ingresos = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (user_id,))
+        gastos = cursor.fetchone()[0] or 0
+        balance = ingresos - gastos
+        if "disponible" in message or "me queda" in message or "sobra" in message:
+            response_text = f"💵 Tienes disponible para gastar: ${balance:,.0f}."
+        else:
+            response_text = f"💰 Tu balance actual es de ${balance:,.0f}."
+        
+        # Alerta de 80%
+        if ingresos > 0 and (gastos / ingresos) > 0.8:
+            response_text += " ⚠️ Has gastado más del 80% de tus ingresos. ¡Te sugiero reducir gastos!"
+
+    # 2. CONSULTAR GASTO POR CATEGORÍA
+    elif "cuánto he gastado" in message or "cuanto gaste" in message or "gastos en" in message or "total en" in message:
+        cat_match = re.search(r'en\s+([\w\s]+)', message)
+        if cat_match:
+            # Extraer, limpiar y capitalizar la categoría
+            categoria = cat_match.group(1).replace('este mes', '').strip().capitalize()
+            
+            mes_actual = datetime.now().strftime("%Y-%m")
+            
+            cursor.execute("""
+                SELECT SUM(monto) FROM gastos 
+                WHERE usuario_id = ? AND tipo = ? AND fecha LIKE ?
+            """, (user_id, categoria, f"{mes_actual}%"))
+            
+            total_categoria = cursor.fetchone()[0] or 0
+            
+            if total_categoria > 0:
+                response_text = f"📈 Este mes, tus gastos en {categoria} suman ${total_categoria:,.0f}."
+            else:
+                response_text = f"👍 ¡Buenas noticias! No encontré gastos para '{categoria}' en el mes actual."
+        else:
+            response_text = "No entendí sobre qué categoría quieres saber. Prueba con: 'gastos en Transporte'."
+
+    # 3. ELIMINAR ÚLTIMO GASTO
+    elif "elimina" in message or "borra" in message:
+        if "último gasto" in message or "ultimo gasto" in message:
+            cursor.execute("SELECT id, tipo, monto, fecha FROM gastos WHERE usuario_id = ? ORDER BY id DESC LIMIT 1", (user_id,))
+            ultimo_gasto = cursor.fetchone()
+            
+            if ultimo_gasto:
+                gasto_id, tipo, monto, fecha = ultimo_gasto
+                cursor.execute("DELETE FROM gastos WHERE id = ?", (gasto_id,))
+                conn.commit()
+                response_text = f"🗑️ He eliminado tu último gasto: ${monto:,.0f} en {tipo} ({fecha})."
+            else:
+                response_text = "No encontré gastos recientes para eliminar."
+        else:
+            response_text = "Por seguridad, solo puedo eliminar el 'último gasto'. Intenta decir: 'Elimina el último gasto'."
+
+    # 4. MAYOR GASTO DEL MES
+    elif "mayor gasto" in message or "mas alto" in message or "más alto" in message:
+        mes_actual = datetime.now().strftime("%Y-%m")
+        cursor.execute("""
+            SELECT tipo, SUM(monto) as total 
+            FROM gastos 
+            WHERE usuario_id = ? AND fecha LIKE ? 
+            GROUP BY tipo 
+            ORDER BY total DESC 
+            LIMIT 1
+        """, (user_id, f"{mes_actual}%"))
+        
+        row = cursor.fetchone()
+        if row:
+            categoria, total = row
+            response_text = f"🏆 Tu categoría de mayor gasto este mes es {categoria} con un total de ${total:,.0f}."
+        else:
+            response_text = "No tienes gastos registrados este mes para analizar."
+
+    # 5. CONSULTAR TOTAL AHORRADO
+    elif "ahorrado" in message or "ahorros" in message or "mis ahorros" in message:
+        cursor.execute("SELECT SUM(monto_actual) FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
+        total_ahorrado = cursor.fetchone()[0] or 0
+        
+        if total_ahorrado > 0:
+            response_text = f"💰 Has ahorrado un total de ${total_ahorrado:,.0f} en tus metas."
+        else:
+            response_text = "Aún no tienes ahorros registrados en tus metas."
+
+    # 6. AGREGAR GASTO O INGRESO
+    elif "gasto" in message or "ingreso" in message or "gasté" in message or "gané" in message:
+        # Intentar extraer monto (busca números)
+        monto_match = re.search(r'\d+', message.replace('.', '').replace(',', '')) 
+        
+        if monto_match:
+            monto = float(monto_match.group())
+            es_gasto = "gasto" in message or "gasté" in message
+            tipo_str = "Gasto" if es_gasto else "Ingreso"
+            
+            # Intentar extraer categoría (lo que sigue después de "en" o "por")
+            categoria = "Varios" # Default
+            cat_match = re.search(r'(?:en|por)\s+(.+)', message)
+            if cat_match:
+                categoria = cat_match.group(1).strip().capitalize()
+            
+            fecha = datetime.now().strftime("%Y-%m-%d")
+
+            if es_gasto:
+                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", (user_id, categoria, monto, fecha))
+                
+                # Verificar si se superó el 80% tras este gasto
+                cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (user_id,))
+                total_ingresos = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (user_id,))
+                total_gastos = cursor.fetchone()[0] or 0
+                
+                response_text = f"✅ Gasto registrado: ${monto:,.0f} en {categoria}."
+                if total_ingresos > 0 and (total_gastos / total_ingresos) > 0.8:
+                    response_text += " ⚠️ ¡Cuidado! Has superado el 80% de tus ingresos."
+            else:
+                cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (?, ?, ?, ?)", (user_id, monto, fecha, categoria))
+                response_text = f"✅ Ingreso registrado: ${monto:,.0f} en {categoria}."
+            
+            conn.commit()
+        else:
+            response_text = f"Entendí que quieres registrar un movimiento, pero no encontré el monto. Escribe el número."
+
+    conn.close()
+    return jsonify({"response": response_text}), 200
 
 # =========================
 # INICIO DEL SERVIDOR

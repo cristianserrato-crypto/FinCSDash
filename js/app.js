@@ -110,6 +110,13 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
                             </div>
                         </div>
+
+                        <div class="card">
+                            <h4>Automatización</h4>
+                            <div class="nav-buttons">
+                                <button onclick="runBot()" class="btn btn-secondary w-100">🤖 Ejecutar Bot</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Columna de Contenido -->
@@ -244,6 +251,17 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <h4>🎯 Metas de Ahorro</h4>
                                     <button onclick="openAddSavingsModal()" class="btn btn-primary btn-sm">＋ Nueva Meta</button>
                                 </div>
+                                <!-- --- NUEVO: Contenedor para el precio del dólar --- -->
+                                <div id="dollar-price-container" class="card" style="background: var(--bg-body); padding: 15px; margin-bottom: 20px; display: none; animation: fadeIn 0.5s;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <small class="text-muted">Precio del Dólar (TRM Aprox.)</small>
+                                            <h4 id="dollar-price-display" style="margin: 5px 0;">--</h4>
+                                        </div>
+                                        <button id="btn-fetch-dollar" onclick="fetchDollarPrice()" class="btn btn-secondary btn-sm">Actualizar</button>
+                                    </div>
+                                </div>
+                                <!-- --- FIN NUEVO --- -->
                                 <div id="savingsListContainer"></div>
                             </div>
                         </div>
@@ -363,6 +381,287 @@ function showDashboard(email) {
             showDashboardView('payments-view'); // Mostrar estado de pagos como principal al inicio
         }
     });
+}
+
+/* ======================
+   CHATBOT INTERACTIVO
+====================== */
+let isChatInitialized = false; // Bandera para saber si ya cargamos el menú
+
+function toggleChat() {
+    const win = document.getElementById("chatbot-window");
+    if (win.style.display === "flex") {
+        win.style.display = "none";
+    } else {
+        win.style.display = "flex";
+        // Enfocar el input al abrir
+        setTimeout(() => document.getElementById("chatInput").focus(), 100);
+        
+        // Si es la primera vez que se abre, mostramos el menú
+        if (!isChatInitialized) {
+            renderChatMenu();
+            isChatInitialized = true;
+        }
+    }
+}
+
+function handleChatKey(event) {
+    if (event.key === "Enter") {
+        sendChatMessage();
+    }
+}
+
+function sendChatMessage() {
+    const input = document.getElementById("chatInput");
+    const message = input.value.trim();
+    if (!message) return;
+    
+    // Limpiar input
+    input.value = "";
+
+    processChatMessage(message);
+}
+
+function processChatMessage(message) {
+    // Al procesar un mensaje, eliminamos el menú anterior para que no se acumulen
+    const existingMenu = document.querySelector("#chat-messages .chat-options");
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+
+    // 1. Mostrar mensaje del usuario
+    appendMessage(message, 'user');
+
+    const token = localStorage.getItem("token");
+
+    // 2. Enviar al backend
+    fetch(`${API}/chat`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ message: message })
+    })
+    .then(res => res.json())
+    .then(data => {
+        // 3. Mostrar respuesta del bot
+        appendMessage(data.response, 'bot');
+        
+        // Si la respuesta indica éxito, recargar movimientos
+        if (data.response.includes("registrado")) {
+            loadMovements();
+            loadPaymentStatus();
+        }
+    })
+    .catch(err => {
+        appendMessage("Error de conexión con el asistente.", 'bot');
+    })
+    .finally(() => {
+        // 4. Volver a mostrar el menú de opciones al final
+        const container = document.getElementById("chat-messages");
+        const newMenu = renderChatMenuOptions();
+        container.appendChild(newMenu);
+        container.scrollTop = container.scrollHeight;
+    });
+}
+
+function appendMessage(text, sender) {
+    const container = document.getElementById("chat-messages");
+    const div = document.createElement("div");
+    div.className = `message ${sender}`;
+    div.innerText = text;
+    container.appendChild(div);
+    // Auto-scroll al final
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderChatMenu() {
+    const container = document.getElementById("chat-messages");
+    container.innerHTML = ""; // Limpiar mensajes anteriores (ej. el hardcoded)
+
+    appendMessage("👋 ¡Hola! Soy tu asistente financiero. Selecciona una opción rápida o escribe tu comando:", 'bot');
+
+    const optionsDiv = renderChatMenuOptions();
+
+    container.appendChild(optionsDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderChatMenuOptions() {
+    const optionsDiv = document.createElement("div");
+    optionsDiv.className = "chat-options";
+
+    // Definición de las opciones del menú
+    const options = [
+        { label: "💰 Ver Saldo", command: "Saldo" },
+        { label: "💵 Disponible", command: "Disponible" },
+        { label: "🏆 Mayor Gasto", command: "Mayor gasto" },
+        { label: "🐷 Ahorrado", command: "Ahorrado" },
+        { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
+        { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" },
+        { label: "🔍 Gastos en...", command: "PARTIAL:Gastos en " } // Comando especial
+    ];
+
+    options.forEach(option => {
+        const btn = document.createElement("button");
+        btn.className = "chat-option-btn";
+        btn.innerText = option.label;
+        btn.onclick = () => {
+            if (option.command.startsWith("PARTIAL:")) {
+                // Si es parcial, solo llenamos el input y enfocamos
+                const input = document.getElementById("chatInput");
+                input.value = option.command.replace("PARTIAL:", "");
+                input.focus();
+            } else if (option.command === "ACTION:QUICK_EXPENSE") {
+                showQuickExpenseForm();
+            } else {
+                // Si es comando completo, lo enviamos
+                processChatMessage(option.command);
+            }
+        };
+        optionsDiv.appendChild(btn);
+    });
+
+    return optionsDiv;
+}
+
+// --- NUEVA FUNCIÓN PARA OBTENER EL PRECIO DEL DÓLAR ---
+function fetchDollarPrice() {
+    const display = document.getElementById("dollar-price-display");
+    const button = document.getElementById("btn-fetch-dollar");
+    const token = localStorage.getItem("token");
+
+    // 1. Mostrar estado de carga
+    if (display) display.innerHTML = `<span class="spinner" style="width:16px; height:16px;"></span>`;
+    if (button) button.disabled = true;
+
+    // 2. Llamar al endpoint del bot
+    fetch(`${API}/run-bot`, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => {
+        if (!res.ok) return res.json().then(err => { throw new Error(err.message || "Error del servidor"); });
+        return res.json();
+    })
+    .then(data => {
+        if (data.status === 'success' && typeof data.dato_extraido === 'number') {
+            // Formatear como moneda colombiana
+            const formattedPrice = new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 2
+            }).format(data.dato_extraido);
+            
+            if (display) display.innerText = formattedPrice;
+            showToast("Precio del dólar actualizado.", 'success');
+        } else {
+            if (display) display.innerText = "Error";
+            showToast(data.mensaje || "No se pudo obtener el precio.", 'error');
+        }
+    })
+    .catch(err => {
+        console.error("Error al obtener precio del dólar:", err);
+        if (display) display.innerText = "Error";
+        showToast(`Error crítico: ${err.message}`, 'error');
+    })
+    .finally(() => {
+        // 3. Reactivar el botón
+        if (button) button.disabled = false;
+    });
+}
+
+/* ======================
+   FORMULARIO RÁPIDO EN CHAT
+====================== */
+function showQuickExpenseForm() {
+    // 1. Eliminar menú de opciones anterior para limpiar la vista
+    const existingMenu = document.querySelector("#chat-messages .chat-options");
+    if (existingMenu) existingMenu.remove();
+
+    const container = document.getElementById("chat-messages");
+    
+    // 2. Mensaje del bot
+    appendMessage("📝 Ingresa los detalles del gasto:", 'bot');
+
+    // 3. Crear contenedor del formulario
+    const formDiv = document.createElement("div");
+    formDiv.className = "chat-form-container";
+    // Estilos en línea para asegurar que se vea bien dentro del chat
+    formDiv.style.cssText = "background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 8px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
+
+    formDiv.innerHTML = `
+        <input type="number" id="chatQuickAmount" placeholder="Monto ($)" class="form-control" style="font-size: 0.9rem; padding: 8px;">
+        <input type="text" id="chatQuickCategory" placeholder="Categoría (ej: Taxi)" class="form-control" style="font-size: 0.9rem; padding: 8px;">
+        <div style="display:flex; gap:8px; margin-top: 5px;">
+            <button onclick="cancelQuickExpense(this)" class="btn btn-secondary btn-sm" style="flex:1;">Cancelar</button>
+            <button onclick="submitQuickExpense(this)" class="btn btn-primary btn-sm" style="flex:1;">Guardar</button>
+        </div>
+    `;
+
+    container.appendChild(formDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function submitQuickExpense(btnElement) {
+    const container = btnElement.closest(".chat-form-container");
+    const amount = document.getElementById("chatQuickAmount").value;
+    const category = document.getElementById("chatQuickCategory").value;
+    
+    if (!amount || !category) {
+        return showToast("Por favor completa ambos campos.", 'error');
+    }
+
+    // Deshabilitar botón para evitar doble envío
+    btnElement.disabled = true;
+    btnElement.innerText = "...";
+
+    const token = localStorage.getItem("token");
+    const today = new Date().toISOString().split('T')[0];
+
+    fetch(`${API}/add-expense`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({
+            tipo: category,
+            monto: amount,
+            fecha: today,
+            es_recurrente: false
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        container.remove(); // Eliminar formulario
+        appendMessage(`✅ Gasto registrado: $${amount} en ${category}`, 'bot');
+        loadMovements(); // Actualizar dashboard
+        loadPaymentStatus();
+        
+        // Restaurar menú
+        const chatContainer = document.getElementById("chat-messages");
+        chatContainer.appendChild(renderChatMenuOptions());
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    })
+    .catch(err => {
+        console.error(err);
+        showToast("Error al registrar gasto", 'error');
+        btnElement.disabled = false;
+        btnElement.innerText = "Guardar";
+    });
+}
+
+function cancelQuickExpense(btnElement) {
+    const container = btnElement.closest(".chat-form-container");
+    container.remove();
+    appendMessage("Operación cancelada.", 'bot');
+    
+    // Restaurar menú
+    const chatContainer = document.getElementById("chat-messages");
+    chatContainer.appendChild(renderChatMenuOptions());
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 // Función auxiliar para ocultar TODAS las secciones primero
@@ -1904,6 +2203,7 @@ function openAddSavingsModal() {
     document.getElementById("newSavingsName").value = "";
     document.getElementById("newSavingsTarget").value = "";
     document.getElementById("newSavingsDate").value = "";
+    document.getElementById("isUsdGoal").checked = false;
     document.getElementById("add-savings-modal").style.display = "flex";
 }
 
@@ -1911,6 +2211,8 @@ function saveSavingsGoal() {
     const nombre = document.getElementById("newSavingsName").value;
     const objetivo = document.getElementById("newSavingsTarget").value;
     const fecha = document.getElementById("newSavingsDate").value;
+    const isUSD = document.getElementById("isUsdGoal").checked;
+    const moneda = isUSD ? 'USD' : 'COP';
     const token = localStorage.getItem("token");
 
     if (!nombre || !objetivo || !fecha) return showToast("Completa todos los campos", "error");
@@ -1921,21 +2223,31 @@ function saveSavingsGoal() {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + token
         },
-        body: JSON.stringify({ nombre, objetivo, fecha })
+        body: JSON.stringify({ nombre, objetivo, fecha, moneda })
     })
     .then(res => res.json())
+    .then(data => {
+.the    n(res => res.json())
     .then(data => {
         showToast("Meta creada", "success");
         document.getElementById("add-savings-modal").style.display = "none";
         loadSavingsGoals();
-    });
-}
 
-function openUpdateSavingsModal(id, nombre, actual) {
+function openUpdateSavingsModal(id, nombre, actual, moneda) {
     document.getElementById("updateSavingsId").value = id;
     document.getElementById("updateSavingsCurrent").value = actual;
     document.getElementById("updateSavingsNameDisplay").innerText = nombre;
     document.getElementById("addSavingsAmount").value = "";
+= id;
+    document.getElementById("updateSavingsCurrent").value = actual;
+    document.getElementById("updateSavingsNameDisplay").innerText = nombre;
+    document.getElementById("addSavingsAmount").value = "";
+
+    const amountLabel = document.querySelector("#update-savings-modal .form-label");
+    if (amountLabel) {
+        amountLabel.innerText = `Monto a agregar (${moneda})`;
+    }
+
     document.getElementById("update-savings-modal").style.display = "flex";
 }
 
@@ -1970,4 +2282,55 @@ function deleteSavingsGoal(id) {
     const token = localStorage.getItem("token");
     fetch(`${API}/delete-savings-goal/${id}`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } })
     .then(() => loadSavingsGoals());
+}
+
+/* ======================
+   BOT (SELENIUM)
+====================== */
+// Esta función se mantiene para el botón original
+function runBot() {
+    // 1. Confirmación y feedback inicial
+    if (!confirm("¿Estás seguro de ejecutar el bot? Esta acción puede tardar unos segundos y abrirá una ventana del navegador.")) {
+        return;
+    }
+    showToast("🤖 Ejecutando bot... por favor espera.", 'info');
+
+    // Deshabilitar el botón para evitar clics múltiples
+    const botButton = document.querySelector("button[onclick='runBot()']");
+    if (botButton) {
+        botButton.disabled = true;
+        // Usamos innerHTML para poder agregar el spinner
+        botButton.innerHTML = `<span class="spinner" style="width:16px; height:16px; vertical-align: middle; margin-right: 8px;"></span> Ejecutando...`;
+    }
+
+    const token = localStorage.getItem("token");
+
+    // 2. Llamada al backend
+    fetch(`${API}/run-bot`, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => { throw new Error(err.message || "Error en el servidor"); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            showToast(`✅ ${data.mensaje}: ${data.dato_extraido}`, 'success');
+        } else {
+            showToast(`❌ Error del bot: ${data.mensaje}`, 'error');
+        }
+    })
+    .catch(err => {
+        console.error("Error al ejecutar el bot:", err);
+        showToast(`Error crítico: ${err.message}`, 'error');
+    })
+    .finally(() => {
+        if (botButton) {
+            botButton.disabled = false;
+            botButton.innerHTML = `🤖 Ejecutar Bot`;
+        }
+    });
 }
