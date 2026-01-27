@@ -1,11 +1,10 @@
 Flask
-flask-cors
-flask-jwt-extended
+Flask-Cors
+Flask-JWT-Extended
 google-auth
 google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
 requests
-Werkzeug
 fpdf
+selenium
+webdriver-manager
 gunicorn

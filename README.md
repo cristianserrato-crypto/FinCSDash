@@ -54,7 +54,7 @@ FinCSDash es una aplicación web de gestión financiera personal diseñada para 
 Asegúrate de tener Python instalado. Navega a la carpeta del proyecto e instala las dependencias necesarias:
 
 ```bash
-pip install flask flask-cors flask-jwt-extended google-auth google-auth-oauthlib requests fpdf selenium webdriver-manager
+pip install -r requirements.txt
 ```
 
 Ejecuta el servidor:
