@@ -449,19 +449,40 @@ function processChatMessage(message) {
         appendMessage(data.response, 'bot');
         
         // Si la respuesta indica éxito, recargar movimientos
-        if (data.response.includes("registrado")) {
+        if (data.response.includes("registrado") || data.response.includes("eliminado")) {
             loadMovements();
             loadPaymentStatus();
+            if (data.response.includes("Ahorro")) loadSavingsGoals(); // Recargar metas si se actualizó ahorro
         }
+
+        // 4. Manejo de Opciones Dinámicas vs Menú Default
+        const container = document.getElementById("chat-messages");
+        
+        if (data.options && data.options.length > 0) {
+            // Si el backend envía opciones específicas (ej. Sí/No), las mostramos
+            const optionsDiv = document.createElement("div");
+            optionsDiv.className = "chat-options";
+            data.options.forEach(opt => {
+                const btn = document.createElement("button");
+                btn.className = "chat-option-btn";
+                btn.innerText = opt.label;
+                btn.onclick = () => processChatMessage(opt.command);
+                optionsDiv.appendChild(btn);
+            });
+            container.appendChild(optionsDiv);
+        } else {
+            // Si no, mostramos el menú principal
+            const newMenu = renderChatMenuOptions();
+            container.appendChild(newMenu);
+        }
+        
+        container.scrollTop = container.scrollHeight;
     })
     .catch(err => {
         appendMessage("Error de conexión con el asistente.", 'bot');
-    })
-    .finally(() => {
-        // 4. Volver a mostrar el menú de opciones al final
+        // Mostrar menú incluso si hay error
         const container = document.getElementById("chat-messages");
-        const newMenu = renderChatMenuOptions();
-        container.appendChild(newMenu);
+        container.appendChild(renderChatMenuOptions());
         container.scrollTop = container.scrollHeight;
     });
 }
@@ -497,6 +518,8 @@ function renderChatMenuOptions() {
         { label: "💰 Ver Saldo", command: "Saldo" },
         { label: "🏆 Mayor Gasto", command: "Mayor gasto" },
         { label: "🐷 Ahorrado", command: "Ahorrado" },
+        { label: "🇺🇸 Dólar Hoy", command: "Precio Dólar" },
+        { label: "📅 Mis Pagos", command: "Pagos pendientes" },
         { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
         { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" },
         { label: "🔍 Gastos en...", command: "PARTIAL:Gastos en " } // Comando especial

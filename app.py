@@ -1078,7 +1078,8 @@ def chat_bot():
         return jsonify({"response": "Usuario no encontrado."}), 404
     user_id = user[0]
 
-    response_text = "No entendí. Prueba: 'Gasto de 20000 en comida', 'Saldo', 'Disponible', 'Mayor gasto', 'Ahorrado' o 'Elimina el último gasto'."
+    response_text = "No entendí. Prueba: 'Ahorré 50000 en Viaje', 'Saldo', 'Dólar hoy' o 'Mis pagos'."
+    response_options = [] # Lista para botones dinámicos
 
     # 1. CONSULTAR SALDO / DISPONIBLE
     if "saldo" in message or "balance" in message or "disponible" in message or "me queda" in message or "sobra" in message:
@@ -1164,7 +1165,84 @@ def chat_bot():
         else:
             response_text = "Aún no tienes ahorros registrados en tus metas."
 
-    # 6. AGREGAR GASTO O INGRESO
+    # 6. REGISTRAR AHORRO EN META (NUEVO FLUJO)
+    elif "ahorré" in message or "ahorro" in message:
+        # Regex para capturar: "Ahorré 50000 en Viaje"
+        match = re.search(r'(?:ahorré|ahorro)\s+(?:de\s+)?(\d+)\s+(?:en|para)\s+(.+)', message)
+        if match:
+            monto = float(match.group(1))
+            nombre_meta = match.group(2).strip()
+
+            # Buscar la meta (búsqueda parcial)
+            cursor.execute("SELECT id, nombre FROM metas_ahorro WHERE usuario_id = ? AND nombre LIKE ?", (user_id, f"%{nombre_meta}%"))
+            meta = cursor.fetchone()
+
+            if meta:
+                meta_id, meta_nombre = meta
+                response_text = f"Entendido. Vas a sumar ${monto:,.0f} a la meta '{meta_nombre}'.\n¿Este dinero sale de tu saldo disponible (registra un gasto)?"
+                
+                # Opciones para el frontend
+                response_options = [
+                    {"label": "✅ Sí, descontar", "command": f"CONFIRM_SAVING:YES:{monto}:{meta_id}"},
+                    {"label": "❌ No, solo sumar", "command": f"CONFIRM_SAVING:NO:{monto}:{meta_id}"}
+                ]
+            else:
+                response_text = f"No encontré una meta llamada '{nombre_meta}'."
+        else:
+            response_text = "Para registrar ahorro, usa el formato: 'Ahorré 50000 en [Nombre Meta]'"
+
+    # 7. CONFIRMACIÓN DE AHORRO (COMANDO INTERNO)
+    elif "confirm_saving" in message:
+        # Formato esperado: CONFIRM_SAVING:YES:MONTO:ID
+        parts = message.split(":")
+        if len(parts) == 4:
+            action, monto_str, meta_id_str = parts[1], parts[2], parts[3]
+            monto = float(monto_str)
+            meta_id = int(meta_id_str)
+            
+            # Actualizar Meta
+            cursor.execute("UPDATE metas_ahorro SET monto_actual = monto_actual + ? WHERE id = ?", (monto, meta_id))
+            
+            msg_extra = ""
+            if action == "yes":
+                # Registrar Gasto
+                fecha = datetime.now().strftime("%Y-%m-%d")
+                cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = ?", (meta_id,))
+                meta_name = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", (user_id, f"Ahorro: {meta_name}", monto, fecha))
+                msg_extra = " y se registró como gasto"
+
+            conn.commit()
+            response_text = f"✅ Ahorro de ${monto:,.0f} registrado{msg_extra} exitosamente."
+        else:
+            response_text = "Error procesando la confirmación."
+
+    # 8. PRECIO DEL DÓLAR
+    elif "precio dolar" in message or "trm" in message or "dólar" in message or "dolar" in message:
+        try:
+            resultado = ejecutar_bot_selenium()
+            if resultado["status"] == "success":
+                val = resultado["dato_extraido"]
+                response_text = f"🇺🇸 El precio del dólar hoy es: ${val:,.2f} COP."
+            else:
+                response_text = f"No pude obtener el dólar. {resultado['mensaje']}"
+        except Exception as e:
+            response_text = f"Error consultando el dólar: {str(e)}"
+
+    # 9. ESTADO DE PAGOS
+    elif "pagos" in message or "pendientes" in message:
+        cursor.execute("SELECT categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+        recurrentes = cursor.fetchall()
+        if recurrentes:
+            response_text = "📅 Tus pagos recurrentes:\n"
+            today_day = datetime.now().day
+            for cat, monto, dia in recurrentes:
+                estado = "✅" if dia < today_day else f"⏳ Día {dia}"
+                response_text += f"- {cat}: ${monto:,.0f} ({estado})\n"
+        else:
+            response_text = "No tienes pagos recurrentes configurados."
+
+    # 10. AGREGAR GASTO O INGRESO (DEFAULT)
     elif "gasto" in message or "ingreso" in message or "gasté" in message or "gané" in message:
         # Intentar extraer monto (busca números)
         monto_match = re.search(r'\d+', message.replace('.', '').replace(',', '')) 
@@ -1203,7 +1281,7 @@ def chat_bot():
             response_text = f"Entendí que quieres registrar un movimiento, pero no encontré el monto. Escribe el número."
 
     conn.close()
-    return jsonify({"response": response_text}), 200
+    return jsonify({"response": response_text, "options": response_options}), 200
 
 # =========================
 # INICIO DEL SERVIDOR

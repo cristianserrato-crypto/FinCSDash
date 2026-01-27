@@ -17,6 +17,8 @@ def ejecutar_bot_selenium():
     options.add_argument("--headless") # Ejecutar en modo silencioso para no molestar al usuario
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu") # Recomendado para entornos server
+    options.add_argument("--window-size=1920,1080") # Evita errores de elementos no visibles
     # Evitar que el navegador se identifique como automatizado
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
@@ -25,18 +27,26 @@ def ejecutar_bot_selenium():
     chrome_bin = "/opt/render/project/.render/chrome/opt/google/chrome/google-chrome"
     if os.path.exists(chrome_bin):
         options.binary_location = chrome_bin
-
-    # Inicializa el driver automáticamente (descarga la versión correcta de Chrome)
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
+        print(f"✅ Chrome binario encontrado en: {chrome_bin}")
+    else:
+        print("⚠️ No se encontró el binario de Chrome en la ruta personalizada.")
 
     resultado = {"status": "error", "dato_extraido": None}
+    driver = None # <--- IMPORTANTE: Inicializar variable para evitar error en finally
 
     try:
+        # Inicializa el driver automáticamente (descarga la versión correcta de Chrome)
+        print("⬇️ Instalando/Verificando ChromeDriver...")
+        service = Service(ChromeDriverManager().install())
+        
+        print("🚀 Iniciando WebDriver...")
+        driver = webdriver.Chrome(service=service, options=options)
+
         # --- LÓGICA DE EXTRACCIÓN DE PRECIO DEL DÓLAR ---
         
         # 1. Navegar a la búsqueda de Google
         url_objetivo = "https://www.google.com/search?q=dolar+a+peso+colombiano"
+        print(f"🌐 Navegando a: {url_objetivo}")
         driver.get(url_objetivo)
         
         # 2. Esperar a que el elemento con el precio del dólar esté presente
@@ -64,7 +74,8 @@ def ejecutar_bot_selenium():
 
     finally:
         # Cerrar el navegador al terminar
-        driver.quit()
+        if driver: # <--- IMPORTANTE: Verificar si existe antes de cerrar
+            driver.quit()
     
     return resultado
 
