@@ -63,6 +63,10 @@ def crear_tablas():
     if 'foto_perfil' not in columnas_existentes:
         print("MIGRANDO: Agregando columna 'foto_perfil' a la tabla 'usuarios'.")
         cursor.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT")
+
+    if 'nombre' not in columnas_existentes:
+        print("MIGRANDO: Agregando columna 'nombre' a la tabla 'usuarios'.")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
     # ---------------------------------------------------------------
 
     # Tabla ingresos

@@ -518,7 +518,7 @@ function renderChatMenuOptions() {
         { label: "💰 Ver Saldo", command: "Saldo" },
         { label: "🏆 Mayor Gasto", command: "Mayor gasto" },
         { label: "🐷 Ahorrado", command: "Ahorrado" },
-        { label: "🇺🇸 Dólar Hoy", command: "Precio Dólar" },
+        { label: "💡 Frase", command: "Frase motivacional" },
         { label: "📅 Mis Pagos", command: "Pagos pendientes" },
         { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
         { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" },
@@ -548,7 +548,7 @@ function renderChatMenuOptions() {
     return optionsDiv;
 }
 
-// --- NUEVA FUNCIÓN PARA OBTENER EL PRECIO DEL DÓLAR ---
+// --- FUNCIÓN PARA OBTENER FRASE MOTIVACIONAL (ANTES DÓLAR) ---
 function fetchDollarPrice() {
     const display = document.getElementById("dollar-price-display");
     const button = document.getElementById("btn-fetch-dollar");
@@ -568,23 +568,21 @@ function fetchDollarPrice() {
         return res.json();
     })
     .then(data => {
-        if (data.status === 'success' && typeof data.dato_extraido === 'number') {
-            // Formatear como moneda colombiana
-            const formattedPrice = new Intl.NumberFormat('es-CO', {
-                style: 'currency',
-                currency: 'COP',
-                minimumFractionDigits: 2
-            }).format(data.dato_extraido);
-            
-            if (display) display.innerText = formattedPrice;
-            showToast("Precio del dólar actualizado.", 'success');
+        if (data.status === 'success') {
+            // Mostrar la frase directamente
+            if (display) {
+                display.innerText = `"${data.dato_extraido}"`;
+                display.style.fontSize = "0.9rem"; // Ajustar tamaño para texto
+                display.style.fontStyle = "italic";
+            }
+            showToast("Frase actualizada.", 'success');
         } else {
             if (display) display.innerText = "Error";
             showToast(data.mensaje || "No se pudo obtener el precio.", 'error');
         }
     })
     .catch(err => {
-        console.error("Error al obtener precio del dólar:", err);
+        console.error("Error al obtener frase:", err);
         if (display) display.innerText = "Error";
         showToast(`Error crítico: ${err.message}`, 'error');
     })
@@ -2113,6 +2111,13 @@ function loadProfile() {
         if (data.email) {
             // Actualizar email en el dropdown
             document.getElementById("dropdownEmail").innerText = data.email;
+            // Actualizar nombre/email en el dropdown
+            const dropdownHeader = document.getElementById("dropdownEmail");
+            if (data.nombre) {
+                dropdownHeader.innerHTML = `<div style="font-size:1rem;">${data.nombre}</div><div style="font-size:0.8rem; font-weight:normal; opacity:0.8;">${data.email}</div>`;
+            } else {
+                dropdownHeader.innerText = data.email;
+            }
             
             const avatarImg = document.getElementById("avatarImage");
             const avatarInitial = document.getElementById("avatarInitial");
@@ -2127,12 +2132,52 @@ function loadProfile() {
             } else {
                 // Si no, mostrar inicial
                 avatarInitial.innerText = data.email.charAt(0).toUpperCase();
+                // Usar inicial del nombre si existe, sino del email
+                const initialSource = data.nombre || data.email;
+                avatarInitial.innerText = initialSource.charAt(0).toUpperCase();
                 avatarInitial.style.display = "block";
                 avatarImg.style.display = "none";
                 btnRemove.style.display = "none";
             }
         }
     });
+}
+
+function openEditProfileModal() {
+    const token = localStorage.getItem("token");
+    // Obtener datos actuales para llenar el formulario
+    fetch(`${API}/get-profile`, { headers: { "Authorization": "Bearer " + token } })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("editProfileName").value = data.nombre || "";
+        document.getElementById("editProfilePassword").value = ""; // Contraseña siempre vacía por seguridad
+        document.getElementById("edit-profile-modal").style.display = "flex";
+    });
+}
+
+function saveProfileUpdate() {
+    const nombre = document.getElementById("editProfileName").value;
+    const password = document.getElementById("editProfilePassword").value;
+    const token = localStorage.getItem("token");
+
+    const body = { nombre: nombre };
+    if (password) body.password = password;
+
+    fetch(`${API}/update-profile`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast(data.message, "success");
+        document.getElementById("edit-profile-modal").style.display = "none";
+        loadProfile(); // Recargar para ver los cambios (ej. nombre en el menú)
+    })
+    .catch(err => showToast("Error al actualizar perfil", "error"));
 }
 
 function uploadProfilePhoto() {
@@ -2277,6 +2322,10 @@ function openUpdateSavingsModal(id, nombre, actual, moneda) {
     document.getElementById("updateSavingsNameDisplay").innerText = nombre;
     document.getElementById("addSavingsAmount").value = "";
 
+    // Resetear el checkbox a marcado por defecto
+    const deductCheckbox = document.getElementById("deductFromBalance");
+    if (deductCheckbox) deductCheckbox.checked = true;
+
     const amountLabel = document.querySelector("#update-savings-modal .form-label");
     if (amountLabel) {
         amountLabel.innerText = `Monto a agregar (${moneda})`;
@@ -2289,6 +2338,7 @@ function saveSavingsUpdate() {
     const id = document.getElementById("updateSavingsId").value;
     const current = parseFloat(document.getElementById("updateSavingsCurrent").value);
     const toAdd = parseFloat(document.getElementById("addSavingsAmount").value);
+    const deduct = document.getElementById("deductFromBalance").checked; // Obtener valor del checkbox
     const token = localStorage.getItem("token");
 
     if (isNaN(toAdd) || toAdd <= 0) return showToast("Ingresa un monto válido", "error");
@@ -2301,13 +2351,21 @@ function saveSavingsUpdate() {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + token
         },
-        body: JSON.stringify({ monto_actual: newTotal })
+        body: JSON.stringify({ 
+            monto_actual: newTotal,
+            monto_agregado: toAdd, // Enviamos cuánto se agregó
+            crear_gasto: deduct    // Enviamos la decisión del usuario
+        })
     })
     .then(res => res.json())
     .then(data => {
         showToast("Ahorro actualizado", "success");
         document.getElementById("update-savings-modal").style.display = "none";
         loadSavingsGoals();
+        if (deduct) {
+            loadMovements(); // Recargar movimientos si se creó un gasto
+            loadPaymentStatus();
+        }
     });
 }
 

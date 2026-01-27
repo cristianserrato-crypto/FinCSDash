@@ -490,12 +490,34 @@ def get_profile():
     email = get_jwt_identity()
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT email, foto_perfil FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT email, foto_perfil, nombre FROM usuarios WHERE email = ?", (email,))
     row = cursor.fetchone()
     conn.close()
     if row:
-        return jsonify({"email": row[0], "foto_perfil": row[1]}), 200
+        return jsonify({"email": row[0], "foto_perfil": row[1], "nombre": row[2]}), 200
     return jsonify({"message": "Usuario no encontrado"}), 404
+
+@app.route("/update-profile", methods=["PUT"])
+@jwt_required()
+def update_profile():
+    email = get_jwt_identity()
+    data = request.json
+    nombre = data.get("nombre")
+    password = data.get("password")
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    if nombre is not None: # Permitir string vacío si quiere borrarlo, pero no None
+        cursor.execute("UPDATE usuarios SET nombre = ? WHERE email = ?", (nombre, email))
+    
+    if password:
+        hashed_password = generate_password_hash(password)
+        cursor.execute("UPDATE usuarios SET password = ? WHERE email = ?", (hashed_password, email))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Perfil actualizado correctamente"}), 200
 
 @app.route("/update-photo", methods=["POST"])
 @jwt_required()
@@ -844,12 +866,27 @@ def update_savings_goal(id):
     email = get_jwt_identity()
     nuevo_monto = data.get("monto_actual")
     
+    # Nuevos campos para la lógica de gasto
+    monto_agregado = data.get("monto_agregado", 0)
+    crear_gasto = data.get("crear_gasto", False)
+    
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
     user_id = cursor.fetchone()[0]
     
     cursor.execute("UPDATE metas_ahorro SET monto_actual = ? WHERE id = ? AND usuario_id = ?", (nuevo_monto, id, user_id))
+    
+    # Crear gasto si el usuario lo pidió
+    if crear_gasto and monto_agregado > 0:
+        cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = ?", (id,))
+        meta_row = cursor.fetchone()
+        meta_nombre = meta_row[0] if meta_row else "Meta"
+        
+        fecha = datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", 
+                       (user_id, f"Ahorro: {meta_nombre}", monto_agregado, fecha))
+
     conn.commit()
     conn.close()
     return jsonify({"message": "Meta actualizada"}), 200
@@ -1078,7 +1115,7 @@ def chat_bot():
         return jsonify({"response": "Usuario no encontrado."}), 404
     user_id = user[0]
 
-    response_text = "No entendí. Prueba: 'Ahorré 50000 en Viaje', 'Saldo', 'Dólar hoy' o 'Mis pagos'."
+    response_text = "No entendí. Prueba: 'Ahorré 50000 en Viaje', 'Saldo', 'Frase' o 'Mis pagos'."
     response_options = [] # Lista para botones dinámicos
 
     # 1. CONSULTAR SALDO / DISPONIBLE
@@ -1217,17 +1254,17 @@ def chat_bot():
         else:
             response_text = "Error procesando la confirmación."
 
-    # 8. PRECIO DEL DÓLAR
-    elif "precio dolar" in message or "trm" in message or "dólar" in message or "dolar" in message:
+    # 8. FRASE MOTIVACIONAL (BOT)
+    elif "frase" in message or "motivacion" in message or "motivación" in message or "bot" in message:
         try:
             resultado = ejecutar_bot_selenium()
             if resultado["status"] == "success":
                 val = resultado["dato_extraido"]
-                response_text = f"🇺🇸 El precio del dólar hoy es: ${val:,.2f} COP."
+                response_text = f"💡 {val}"
             else:
-                response_text = f"No pude obtener el dólar. {resultado['mensaje']}"
+                response_text = f"Error del bot: {resultado['mensaje']}"
         except Exception as e:
-            response_text = f"Error consultando el dólar: {str(e)}"
+            response_text = f"Error ejecutando el bot: {str(e)}"
 
     # 9. ESTADO DE PAGOS
     elif "pagos" in message or "pendientes" in message:
