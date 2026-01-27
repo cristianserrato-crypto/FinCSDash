@@ -44,23 +44,26 @@ document.addEventListener("DOMContentLoaded", () => {
         // Reemplaza el contenido HTML interno con todo el diseño del panel de control
         dashboard.innerHTML = `
             <div class="dashboard-container">
-            <div style="
-    background: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeeba;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    font-size: 0.9rem;
-">
-    ⚠️ <strong>FinCSDash – Versión de prueba (Demo)</strong><br>
-    No ingreses datos reales o sensibles. Esta aplicación está en fase de pruebas.
-</div>
+                <!-- Logo y Aviso Demo (Nueva Cabecera Superior) -->
+                <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+                    <img src="./logo.png" alt="FinCSDash" style="height: 55px; width: auto;">
+                    <div style="
+                        background: #fff3cd;
+                        color: #856404;
+                        border: 1px solid #ffeeba;
+                        padding: 12px 16px;
+                        border-radius: 8px;
+                        font-size: 0.9rem;
+                        flex: 1;
+                    ">
+                        ⚠️ <strong>FinCSDash – Versión de prueba (Demo)</strong> — No ingreses datos reales o sensibles.
+                    </div>
+                </div>
+
                 <!-- Encabezado -->
                 <div class="header-bar">
                     <div class="header-left">
                          <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-                         <img src="./logo.png" alt="FinCSDash" class="app-logo">
                     </div>
 
                     <div class="header-right">
@@ -77,7 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         <!-- PERFIL DE USUARIO -->
                         <div class="profile-container">
-                            <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar">
+                            <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar" style="cursor: pointer;">
                                 <span id="avatarInitial">U</span>
                                 <img id="avatarImage" src="" alt="Perfil" style="display:none;">
                             </div>
@@ -86,10 +89,15 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <strong id="dropdownEmail">usuario@email.com</strong>
                                 </div>
                                 <div class="dropdown-body">
+                                    <button onclick="openEditProfileModal()" class="dropdown-item">👤 Editar Perfil</button>
                                     <label for="profilePhotoInput" class="dropdown-item">📷 Cambiar Foto</label>
                                     <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
                                     <button id="btnRemovePhoto" class="dropdown-item" onclick="removeProfilePhoto()" style="display:none; color: var(--danger);">🗑️ Eliminar Foto</button>
+                                    
                                     <div class="dropdown-divider"></div>
+                                    
+                                    <button onclick="toggleDarkMode()" class="dropdown-item">🌙 Modo Oscuro</button>
+                                    <button onclick="logout()" class="dropdown-item" style="color: var(--danger);">🚪 Cerrar Sesión</button>
                                 </div>
                             </div>
                         </div>
@@ -1532,6 +1540,7 @@ document.addEventListener('click', function(event) {
     if (profileDropdown && profileDropdown.classList.contains('active')) {
         if (!profileDropdown.contains(event.target) && !profileAvatar.contains(event.target)) {
             profileDropdown.classList.remove('active');
+            profileAvatar.classList.remove('active');
         }
     }
 });
@@ -2098,7 +2107,9 @@ function deleteRecurringExpense() {
 ====================== */
 function toggleProfileMenu() {
     const dropdown = document.getElementById("profileDropdown");
+    const avatar = document.getElementById("profileAvatar");
     dropdown.classList.toggle("active");
+    avatar.classList.toggle("active");
 }
 
 function loadProfile() {

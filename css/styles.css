@@ -339,6 +339,12 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
     border-color: var(--primary);
 }
 
+.profile-avatar.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.3);
+    transform: scale(1.05);
+}
+
 .profile-avatar img {
     width: 100%;
     height: 100%;
