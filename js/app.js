@@ -44,6 +44,20 @@ document.addEventListener("DOMContentLoaded", () => {
         document.head.appendChild(script);
     }
 
+    // INYECTAR ESTILOS PARA EMOJIS ANIMADOS
+    const emojiStyle = document.createElement('style');
+    emojiStyle.innerHTML = `
+        @keyframes emojiBounce {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-3px) scale(1.2); }
+        }
+        .animated-emoji {
+            display: inline-block;
+            animation: emojiBounce 1.5s infinite ease-in-out;
+        }
+    `;
+    document.head.appendChild(emojiStyle);
+
     // INYECTAR ESTRUCTURA DEL DASHBOARD (Para asegurar que se vean los elementos)
     // Busca el elemento con ID "dashboard-view"
     const dashboard = document.getElementById("dashboard-view");
@@ -110,12 +124,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     <!-- Columna de Navegación -->
                     <div class="nav-column">
                         <div class="card">
-                            <h4>Navegación</h4>
+                            <h4 style="text-align: center; text-transform: uppercase;">Navegación</h4>
                             <div class="nav-buttons">
-                                <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="btn btn-secondary w-100">Registrar</button>
+                                <button id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="btn btn-secondary w-100">Estado Pagos</button>
                                 <button id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="btn btn-secondary w-100">Resumen</button>
                                 <button id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="btn btn-secondary w-100">Análisis</button>
-                                <button id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="btn btn-secondary w-100">Estado Pagos</button>
+                                <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="btn btn-secondary w-100">Registrar</button>
                                 <button id="nav-btn-savings" onclick="showDashboardView('savings-view')" class="btn btn-secondary w-100">Metas Ahorro</button>
                                 <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
                             </div>
@@ -549,7 +563,16 @@ function appendMessage(text, sender) {
     const container = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = `message ${sender}`;
-    div.innerText = text;
+    
+    if (sender === 'bot') {
+        // Escapar HTML para seguridad y luego animar emojis
+        let safeText = escapeHtml(text);
+        // Regex para detectar emojis y envolverlos en un span animado
+        div.innerHTML = safeText.replace(/(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu, '<span class="animated-emoji">$1</span>');
+    } else {
+        div.innerText = text;
+    }
+    
     container.appendChild(div);
     // Auto-scroll al final
     container.scrollTop = container.scrollHeight;
@@ -1617,7 +1640,10 @@ document.addEventListener('click', function(event) {
 
     // Cerrar chatbot si se hace clic fuera
     if (chatbotWindow && chatbotWindow.style.display === 'flex') {
-        if (!chatbotWindow.contains(event.target) && (!chatbotBtn || !chatbotBtn.contains(event.target))) {
+        // Verificar si el elemento clickeado sigue en el DOM (para evitar cierres al eliminar botones dinámicos)
+        if (document.body.contains(event.target) && 
+            !chatbotWindow.contains(event.target) && 
+            (!chatbotBtn || !chatbotBtn.contains(event.target))) {
             chatbotWindow.style.display = 'none';
         }
     }
