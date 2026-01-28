@@ -49,6 +49,9 @@
     <!-- Botón que al hacer clic ejecuta la función 'login()' de JavaScript -->
     <button onclick="login()">Ingresar</button>
 
+    <!-- NUEVO: Enlace para restablecer contraseña -->
+    <a href="#" onclick="showForgotPassword()" style="text-align: center; display: block; margin-top: 10px; font-size: 0.9rem; color: var(--primary);">¿Olvidaste tu contraseña?</a>
+
     <!-- Contenedor vacío donde Google dibujará su botón de "Iniciar sesión" -->
     <div id="googleBtn"></div>
 
@@ -66,6 +69,12 @@
 
     <input type="email" id="registerEmail" placeholder="Email">
     <input type="password" id="registerPassword" placeholder="Contraseña">
+
+    <!-- NUEVO: Barra de seguridad de contraseña -->
+    <div id="password-strength-container" style="display: none; margin-top: -5px; margin-bottom: 10px;">
+        <div id="password-strength-bar"></div>
+        <small id="password-strength-text"></small>
+    </div>
 
     <!-- Ejecuta la función 'register()' al hacer clic -->
     <button onclick="register()">Registrar</button>
@@ -92,6 +101,35 @@
     <p>¿No recibiste el código?</p>
     <button id="resendBtn" onclick="resendCode()">Reenviar código</button>
     <p id="resendMsg"></p>
+</section>
+
+<!-- NUEVO: OLVIDO DE CONTRASEÑA -->
+<section id="forgot-password-view" style="display:none;">
+    <h2>Restablecer Contraseña</h2>
+    <p style="text-align: center; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem;" class="text-muted">
+        Ingresa tu correo y te enviaremos un token para crear una nueva contraseña.
+    </p>
+    <input type="email" id="forgotEmail" placeholder="Email">
+    <button onclick="requestPasswordReset()">Enviar Token</button>
+    <p id="forgotMsg"></p>
+    <button onclick="showLogin()" class="btn-secondary">Volver al Login</button>
+</section>
+
+<!-- NUEVO: RESETEAR CONTRASEÑA CON TOKEN -->
+<section id="reset-password-view" style="display:none;">
+    <h2>Crear Nueva Contraseña</h2>
+    <p style="text-align: center; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem;" class="text-muted">
+        Ingresa el token que recibiste en tu correo y tu nueva contraseña.
+    </p>
+    <input type="text" id="resetToken" placeholder="Token de reseteo">
+    <input type="password" id="resetPassword" placeholder="Nueva Contraseña">
+    <!-- Barra de seguridad para la nueva contraseña -->
+    <div id="reset-password-strength-container" style="display: none; margin-top: -5px; margin-bottom: 10px;">
+        <div id="reset-password-strength-bar"></div>
+        <small id="reset-password-strength-text"></small>
+    </div>
+    <button onclick="resetPasswordWithToken()">Actualizar Contraseña</button>
+    <p id="resetMsg"></p>
 </section>
 
 <!-- ONBOARDING (CONFIGURACIÓN INICIAL) -->
@@ -142,6 +180,23 @@
     </div>
 </section>
 
+<!-- NUEVO: PERFIL INICIAL -->
+<section id="initial-profile-view" style="display:none;">
+    <h2>Completa tu perfil</h2>
+    <p>Necesitamos algunos datos para empezar.</p>
+    
+    <label class="form-label">Nombre(s)</label>
+    <input type="text" id="profileNombre" placeholder="Tu nombre" class="form-control">
+    
+    <label class="form-label">Apellido(s)</label>
+    <input type="text" id="profileApellidos" placeholder="Tus apellidos" class="form-control">
+    
+    <label class="form-label">Edad</label>
+    <input type="number" id="profileEdad" placeholder="Tu edad" class="form-control">
+    
+    <button onclick="saveInitialProfile()" class="btn btn-primary w-100" style="margin-top:20px;">Guardar y Continuar</button>
+</section>
+
 <!-- DASHBOARD -->
 <!-- Sección principal del usuario, inicia oculta hasta que se loguee -->
 <section id="dashboard-view" style="display:none;">
@@ -170,7 +225,7 @@
         
         <div class="flex-gap">
             <button onclick="deleteRecurringExpense()" class="btn btn-danger" style="width: auto;" title="Eliminar">🗑️</button>
-            <button onclick="document.getElementById('edit-recurring-modal').style.display='none'" class="btn btn-secondary">Cancelar</button>
+            <button onclick="closeModal('edit-recurring-modal')" class="btn btn-secondary">Cancelar</button>
             <button onclick="saveRecurringEdit()" class="btn btn-primary">Guardar</button>
         </div>
     </div>
@@ -197,7 +252,7 @@
         </div>
         
         <div class="flex-gap">
-            <button onclick="document.getElementById('add-savings-modal').style.display='none'" class="btn btn-secondary">Cancelar</button>
+            <button onclick="closeModal('add-savings-modal')" class="btn btn-secondary">Cancelar</button>
             <button onclick="saveSavingsGoal()" class="btn btn-primary">Crear</button>
         </div>
     </div>
@@ -215,7 +270,7 @@
         <input type="password" id="editProfilePassword" class="form-control form-group" placeholder="Dejar vacío para no cambiar">
         
         <div class="flex-gap">
-            <button onclick="document.getElementById('edit-profile-modal').style.display='none'" class="btn btn-secondary">Cancelar</button>
+            <button onclick="closeModal('edit-profile-modal')" class="btn btn-secondary">Cancelar</button>
             <button onclick="saveProfileUpdate()" class="btn btn-primary">Guardar</button>
         </div>
     </div>
@@ -239,7 +294,7 @@
         </div>
 
         <div class="flex-gap">
-            <button onclick="document.getElementById('update-savings-modal').style.display='none'" class="btn btn-secondary">Cancelar</button>
+            <button onclick="closeModal('update-savings-modal')" class="btn btn-secondary">Cancelar</button>
             <button onclick="saveSavingsUpdate()" class="btn btn-success">Agregar</button>
         </div>
     </div>

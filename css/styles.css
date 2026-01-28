@@ -120,6 +120,8 @@ body.dark-mode .card:hover { transform: translateY(-3px); box-shadow: none; }
     align-items: center; 
     margin-bottom: 30px;
     border: 1px solid var(--border-color);
+    position: relative;
+    z-index: 100;
 }
 
 /* Menu Hamburguesa */
@@ -304,9 +306,28 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
 
 /* --- MODAL --- */
 .modal-overlay {
-    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;
     backdrop-filter: blur(5px);
+    
+    /* Animación */
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease-out;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-overlay .card {
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.active .card {
+    transform: scale(1);
 }
 
 /* --- PERFIL DE USUARIO --- */
@@ -352,7 +373,7 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
 }
 
 .profile-dropdown {
-    display: none;
+    /* display: none; Eliminado para permitir transición */
     position: absolute;
     top: 60px;
     right: 0;
@@ -363,11 +384,18 @@ tbody tr:nth-child(5) { animation-delay: 0.25s; }
     width: 240px;
     z-index: 1000;
     overflow: hidden;
-    animation: fadeIn 0.2s ease-out;
+    /* Estado inicial (Oculto) */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .profile-dropdown.active {
-    display: block;
+    /* Estado activo (Visible) */
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .dropdown-header {

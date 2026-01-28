@@ -1,16 +1,21 @@
+# Importa el módulo 'time' para poder pausar la ejecución (simular espera).
 import time
+# Importa el módulo 'random' para elegir opciones al azar.
 import random
 
-def ejecutar_bot_selenium():
+# Define la función que será llamada desde app.py.
+def obtener_frase_motivacional():
     """
-    Versión simplificada del bot que no usa Selenium.
-    Devuelve una frase motivacional aleatoria.
+    Devuelve una frase motivacional aleatoria (Simulación de bot).
     """
+    # Imprime un mensaje en la consola del servidor para saber que el bot arrancó.
     print("🤖 Iniciando bot de frases...")
 
     # Simular un proceso
+    # Pausa el código durante 1 segundo para que parezca que está "pensando" o cargando.
     time.sleep(1)
 
+    # Crea una lista (array) con varias frases de texto.
     frases = [
         "El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
         "No ahorres lo que te queda después de gastar, gasta lo que te queda después de ahorrar.",
@@ -22,14 +27,18 @@ def ejecutar_bot_selenium():
         "No cuentes los días, haz que los días cuenten."
     ]
 
+    # Crea un diccionario (objeto JSON) con la respuesta que enviaremos.
     resultado = {
-        "status": "success",
-        "mensaje": "Frase del día",
-        "dato_extraido": random.choice(frases)
+        "status": "success", # Indica que todo salió bien.
+        "mensaje": "Frase del día", # Un título para el mensaje.
+        "dato_extraido": random.choice(frases) # Elige una frase al azar de la lista.
     }
     
+    # Devuelve el diccionario con la información.
     return resultado
 
 # Para probarlo solo: python bot.py
+# Este bloque 'if' solo se ejecuta si corres este archivo directamente, no si lo importas.
 if __name__ == "__main__":
-    print(ejecutar_bot_selenium())
+    # Imprime el resultado de la función para probarla en la terminal.
+    print(obtener_frase_motivacional())

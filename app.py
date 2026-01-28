@@ -11,9 +11,10 @@ Login tradicional y Login con Google
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import random
+import secrets
 import uuid
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 import io
@@ -33,14 +34,14 @@ from database import conectar_db, crear_tablas
 from gmail_service import enviar_correo
 
 # Importar el Bot
-from bot import ejecutar_bot_selenium
+from bot import obtener_frase_motivacional
 
 # =========================
 # CONFIGURACIÓN APP
 # =========================
 app = Flask(__name__)
 CORS(app)
-app.config["JWT_SECRET_KEY"] = "super-secreto-cambiar-en-produccion"  # ⚠️ CAMBIAR ESTO EN PROD
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", secrets.token_hex(32))
 jwt = JWTManager(app)
 
 GOOGLE_CLIENT_ID = "741392813029-8iavkp2iqcntpb1m4d16h8t02c028naf.apps.googleusercontent.com"
@@ -53,19 +54,20 @@ crear_tablas()
 # =========================
 @app.route("/")
 def index():
-    return """
-    <div style="text-align:center; margin-top:50px; font-family: Arial, sans-serif;">
-        <img src="/logo" alt="FinCSDash Logo" width="200">
-        <h1>Backend FinCSDash Activo</h1>
-        <p>El servidor está funcionando correctamente.</p>
-    </div>
-    """
+    return send_file("index.html")
 
-@app.route("/logo")
-def serve_logo():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    logo_path = os.path.join(base_dir, "logo.png")
-    return send_file(logo_path, mimetype='image/png')
+# Rutas para servir archivos estáticos (CSS, JS, Imágenes)
+@app.route("/css/<path:path>")
+def serve_css(path):
+    return send_file(os.path.join("css", path))
+
+@app.route("/js/<path:path>")
+def serve_js(path):
+    return send_file(os.path.join("js", path))
+
+@app.route("/logo.png")
+def serve_logo_png():
+    return send_file("logo.png")
 
 # =========================
 # REGISTRO DE USUARIO
@@ -76,9 +78,18 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
+    if not email:
+        return jsonify({"message": "El email es obligatorio."}), 400
+
+    # --- VALIDACIÓN DE CONTRASEÑA ---
+    if not password or not (8 <= len(password) <= 16 and
+                            re.search('[a-z]', password) and
+                            re.search('[A-Z]', password) and
+                            re.search('[0-9]', password) and
+                            re.search('[^a-zA-Z0-9]', password)):
+        return jsonify({"message": "La contraseña debe tener entre 8 y 16 caracteres, e incluir al menos una mayúscula, una minúscula, un número y un caracter especial."}), 400
+
     # --- VALIDACIÓN DE ENTRADA ---
-    if not email or not password:
-        return jsonify({"message": "El email y la contraseña son obligatorios."}), 400
 
     # --- LÓGICA PARA SUSPENDER VERIFICACIÓN ---
     hashed_password = generate_password_hash(password)
@@ -240,6 +251,83 @@ def login():
 
 
 # =========================
+# RESETEO DE CONTRASEÑA
+# =========================
+@app.route("/request-password-reset", methods=["POST"])
+def request_password_reset():
+    data = request.json
+    email = data.get("email")
+    if not email:
+        return jsonify({"message": "El email es requerido."}), 400
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if user:
+        # Generar token y fecha de expiración
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        
+        cursor.execute("UPDATE usuarios SET reset_token = ?, reset_token_expires = ? WHERE email = ?", (token, expires.isoformat(), email))
+        conn.commit()
+
+        # Enviar correo (asumiendo que el servicio de correo está configurado)
+        asunto = "Restablecimiento de Contraseña - FinCSDash"
+        cuerpo = f"""
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2>Restablecimiento de Contraseña</h2>
+            <p>Hola,</p>
+            <p>Recibimos una solicitud para restablecer tu contraseña en FinCSDash.</p>
+            <p>Usa el siguiente token para crear una nueva contraseña. Este token es válido por 1 hora.</p>
+            <p style="background: #f2f2f2; border-left: 5px solid #5e72e4; padding: 15px; font-size: 1.2em; font-family: monospace;">{token}</p>
+            <p>Si no solicitaste esto, puedes ignorar este correo de forma segura.</p>
+            <hr>
+            <p style="font-size: 0.9em; color: #888;">Gracias,<br>El equipo de FinCSDash</p>
+        </div>
+        """
+        try:
+            enviar_correo(email, asunto, cuerpo)
+            print(f"🔑 TOKEN DE RESET para {email}: {token}") # Para depuración
+        except Exception as e:
+            print(f"⚠️ No se pudo enviar el correo de reseteo: {e}")
+    
+    conn.close()
+    # Siempre devolver un mensaje de éxito para evitar ataques de enumeración de usuarios
+    return jsonify({"message": "Si tu correo está registrado, recibirás un token para restablecer tu contraseña."}), 200
+
+@app.route("/reset-password-with-token", methods=["POST"])
+def reset_password_with_token():
+    data = request.json
+    token = data.get("token")
+    new_password = data.get("password")
+
+    if not token or not new_password:
+        return jsonify({"message": "El token y la nueva contraseña son requeridos."}), 400
+
+    # Re-validar la contraseña en el backend
+    if not (8 <= len(new_password) <= 16 and re.search('[a-z]', new_password) and re.search('[A-Z]', new_password) and re.search('[0-9]', new_password) and re.search('[^a-zA-Z0-9]', new_password)):
+        return jsonify({"message": "La nueva contraseña no cumple con los requisitos de seguridad."}), 400
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT email, reset_token_expires FROM usuarios WHERE reset_token = ?", (token,))
+    user = cursor.fetchone()
+
+    if not user or datetime.now(timezone.utc) > datetime.fromisoformat(user[1]):
+        conn.close()
+        return jsonify({"message": "Token inválido o expirado."}), 400
+
+    hashed_password = generate_password_hash(new_password)
+    cursor.execute("UPDATE usuarios SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE email = ?", (hashed_password, user[0]))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Contraseña actualizada correctamente. Ya puedes iniciar sesión."}), 200
+
+# =========================
 # LOGIN CON GOOGLE
 # =========================
 @app.route("/google-login", methods=["POST"])
@@ -282,6 +370,47 @@ def google_login():
         print("ERROR GOOGLE LOGIN:", e)
         return jsonify({"message": "Token inválido"}), 401
 
+
+# =========================
+# PERFIL INICIAL
+# =========================
+@app.route("/check-initial-profile", methods=["GET"])
+@jwt_required()
+def check_initial_profile():
+    email = get_jwt_identity()
+    conn = conectar_db()
+    cursor = conn.cursor()
+    # Check if name, last name or age are missing
+    cursor.execute("SELECT nombre, apellidos, edad FROM usuarios WHERE email = ?", (email,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    # If any of the fields is None or empty string for text fields, or age is 0/None
+    needs_profile_info = not (row and row[0] and row[1] and row[2])
+        
+    return jsonify({"needs_profile_info": needs_profile_info}), 200
+
+@app.route("/save-initial-profile", methods=["POST"])
+@jwt_required()
+def save_initial_profile():
+    data = request.json
+    email = get_jwt_identity()
+    
+    nombre = data.get("nombre")
+    apellidos = data.get("apellidos")
+    edad = data.get("edad")
+
+    if not all([nombre, apellidos, edad]):
+        return jsonify({"message": "Todos los campos son requeridos."}), 400
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE usuarios SET nombre = ?, apellidos = ?, edad = ? WHERE email = ?", (nombre, apellidos, edad, email))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Información de perfil guardada correctamente"}), 200
 
 # =========================
 # ONBOARDING & ESTADO
@@ -1090,8 +1219,8 @@ def export_pdf():
 @jwt_required()
 def run_bot():
     try:
-        # Ejecutar la lógica de Selenium
-        resultado = ejecutar_bot_selenium()
+        # Ejecutar la lógica del bot (Frases)
+        resultado = obtener_frase_motivacional()
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({"message": "Error interno del bot", "error": str(e)}), 500
@@ -1257,7 +1386,7 @@ def chat_bot():
     # 8. FRASE MOTIVACIONAL (BOT)
     elif "frase" in message or "motivacion" in message or "motivación" in message or "bot" in message:
         try:
-            resultado = ejecutar_bot_selenium()
+            resultado = obtener_frase_motivacional()
             if resultado["status"] == "success":
                 val = resultado["dato_extraido"]
                 response_text = f"💡 {val}"
@@ -1324,4 +1453,6 @@ def chat_bot():
 # INICIO DEL SERVIDOR
 # =========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Desactivar debug en producción para evitar exponer información sensible
+    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)

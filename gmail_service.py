@@ -1,23 +1,39 @@
 import smtplib
-from email.mime.text import MIMEText
+import ssl
 import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# CONFIGURACIÓN DEL CORREO
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
+def enviar_correo(destinatario, asunto, cuerpo):
+    """
+    Envía un correo electrónico real usando el servidor SMTP de Gmail.
+    Requiere configurar las variables de entorno MAIL_USERNAME y MAIL_PASSWORD.
+    """
+    # 1. Obtener credenciales de las variables de entorno
+    remitente = os.environ.get("fincsdash@gmail.com")
+    password = os.environ.get("199507130202Cr*")
 
+    if not remitente or not password:
+        print("⚠️ Error: No se han configurado las credenciales de correo (MAIL_USERNAME, MAIL_PASSWORD).")
+        return False
 
-EMAIL_REMITENTE = "fincsdash@gmail.com"
-EMAIL_PASSWORD = "zelj aekz souk mckt"
+    # 2. Crear el mensaje
+    mensaje = MIMEMultipart("alternative")
+    mensaje["Subject"] = asunto
+    mensaje["From"] = remitente
+    mensaje["To"] = destinatario
 
+    # El cuerpo se asume que es HTML (según app.py)
+    mensaje.attach(MIMEText(cuerpo, "html"))
 
-def enviar_correo(destinatario, asunto, mensaje):
-    msg = MIMEText(mensaje)
-    msg["Subject"] = asunto
-    msg["From"] = EMAIL_REMITENTE
-    msg["To"] = destinatario
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
-        server.send_message(msg)
+    # 3. Enviar usando SMTP_SSL de Gmail
+    try:
+        contexto = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=contexto) as server:
+            server.login(remitente, password)
+            server.send_message(mensaje)
+        print(f"✅ Correo enviado a {destinatario}")
+        return True
+    except Exception as e:
+        print(f"❌ Error enviando correo: {e}")
+        return False

@@ -1,6 +1,13 @@
 // Define la dirección del servidor (Backend).
-const API = "https://fincsdash-backend.onrender.com"; // ☁️ Render (Producción)
-// const API = "http://127.0.0.1:5000"; // 🏠 Local (Pruebas)
+// Por defecto asume que estás en tu máquina local.
+let API = "http://127.0.0.1:5000"; // Por defecto Local
+
+// Verifica si la página NO está en localhost (es decir, está en Render).
+if (window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
+    // ⚠️ IMPORTANTE: Si usas GitHub Pages para el frontend y Render para el backend,
+    // debes poner aquí la URL exacta de tu backend en Render.
+    API = "https://TU-APP-EN-RENDER.onrender.com"; // <--- CAMBIA ESTO POR TU URL REAL DE RENDER
+}
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
@@ -301,6 +308,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setupRegisterValidation();
 });
 
+
+
 /* ======================
    VISTAS
 ====================== */
@@ -357,32 +366,73 @@ function showVerify() {
     triggerFadeAnimation(view);
 }
 
+// Función para mostrar la pantalla de Olvido de Contraseña
+function showForgotPassword() {
+    hideAll();
+    adjustMainLayout(false);
+    const view = document.getElementById("forgot-password-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
+}
+
+// Función para mostrar la pantalla de Reseteo con Token
+function showResetPassword(token = '') {
+    hideAll();
+    adjustMainLayout(false);
+    const view = document.getElementById("reset-password-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
+    if (token) document.getElementById("resetToken").value = token;
+}
+
+// Función para mostrar el formulario de perfil inicial
+function showInitialProfile() {
+    hideAll();
+    adjustMainLayout(false); // Usar layout centrado
+    const view = document.getElementById("initial-profile-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
+}
+
 // Función para mostrar el Dashboard principal
 function showDashboard(email) {
     hideAll();
     
-    // VERIFICAR SI NECESITA ONBOARDING
     const token = localStorage.getItem("token");
-    fetch(`${API}/check-onboarding`, {
+    // 1. CHECK IF PROFILE IS COMPLETE
+    fetch(`${API}/check-initial-profile`, {
         headers: { "Authorization": "Bearer " + token }
     })
     .then(res => res.json())
-    .then(data => {
-        if (data.needs_onboarding) {
-            startOnboarding();
+    .then(profileData => {
+        if (profileData.needs_profile_info) {
+            showInitialProfile();
         } else {
-            adjustMainLayout(true);
-            const view = document.getElementById("dashboard-view");
-            view.style.display = "block";
-            triggerFadeAnimation(view);
-            // document.getElementById("userEmail").innerText = email; // Ya no usamos este span suelto
-            loadCategories();
-            loadMovements();
-            // Cargar estado de pagos en segundo plano
-            loadPaymentStatus();
-            loadProfile(); // Cargar foto y datos del perfil
-            showDashboardView('payments-view'); // Mostrar estado de pagos como principal al inicio
+            // 2. VERIFY IF IT NEEDS ONBOARDING
+            fetch(`${API}/check-onboarding`, {
+                headers: { "Authorization": "Bearer " + token }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.needs_onboarding) {
+                    startOnboarding();
+                } else {
+                    adjustMainLayout(true);
+                    const view = document.getElementById("dashboard-view");
+                    view.style.display = "block";
+                    triggerFadeAnimation(view);
+                    loadCategories();
+                    loadMovements();
+                    loadPaymentStatus();
+                    loadProfile();
+                    showDashboardView('payments-view');
+                }
+            });
         }
+    }).catch(err => {
+        console.error("Error checking user status:", err);
+        showToast("Error al cargar tu perfil. Intenta iniciar sesión de nuevo.", "error");
+        logout(); // Logout on error to avoid being stuck
     });
 }
 
@@ -820,6 +870,17 @@ function formatCurrency(amount) {
     }).format(amount);
 }
 
+// NUEVO: Función para escapar HTML y prevenir XSS (Cross-Site Scripting)
+function escapeHtml(text) {
+    if (typeof text !== 'string') return text;
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 
 /* ======================
    MOVIMIENTOS (TABLA)
@@ -904,12 +965,12 @@ function renderMovements(data) {
 
         row.innerHTML = `
             <td>${formattedDate}</td>
-            <td>${mov.categoria} ${iconRecurrente}</td>
+            <td>${escapeHtml(mov.categoria)} ${iconRecurrente}</td>
             <td style="color: ${color}; font-weight: bold;">
                 ${signo} ${formatCurrency(mov.monto)}
             </td>
             <td>
-                <button onclick="deleteMovement(${mov.id}, '${mov.tipo}')" style="color: red; cursor: pointer;">🗑️</button>
+                <button data-type="${escapeHtml(mov.tipo)}" onclick="deleteMovement(${mov.id}, this.dataset.type)" style="color: red; cursor: pointer;">🗑️</button>
             </td>
         `;
         tbody.appendChild(row);
@@ -1190,7 +1251,12 @@ function exportToCSV() {
         let csv = "Fecha,Tipo,Categoría,Monto\n";
         data.forEach(d => {
             // Protegemos la categoría por si tiene comas
-            const cat = d.categoria.includes(",") ? `"${d.categoria}"` : d.categoria;
+            let cat = d.categoria;
+            // Prevenir CSV Injection (Fórmulas maliciosas en Excel)
+            if (cat.startsWith('=') || cat.startsWith('+') || cat.startsWith('-') || cat.startsWith('@')) {
+                cat = "'" + cat;
+            }
+            cat = cat.includes(",") ? `"${cat}"` : cat;
             csv += `${d.fecha},${d.tipo},${cat},${d.monto}\n`;
         });
 
@@ -1678,6 +1744,36 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+function saveInitialProfile() {
+    const nombre = document.getElementById("profileNombre").value;
+    const apellidos = document.getElementById("profileApellidos").value;
+    const edad = document.getElementById("profileEdad").value;
+    const token = localStorage.getItem("token");
+
+    if (!nombre || !apellidos || !edad) {
+        return showToast("Por favor, completa todos los campos.", "error");
+    }
+
+    fetch(`${API}/save-initial-profile`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ nombre, apellidos, edad })
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Error al guardar el perfil.");
+        return res.json();
+    })
+    .then(data => {
+        showToast(data.message, "success");
+        // Profile saved, now check for onboarding
+        startOnboarding(); // Directly go to onboarding
+    })
+    .catch(err => showToast(err.message, "error"));
+}
+
 /* ======================
    VALIDACIÓN EN TIEMPO REAL
 ====================== */
@@ -1687,7 +1783,15 @@ function setupRegisterValidation() {
     // Selecciona el botón de registro usando su atributo onclick
     const registerBtn = document.querySelector("#register-view button[onclick='register()']");
 
-    if (!emailInput || !passInput || !registerBtn) return;
+    // Llamar a la validación para el formulario de reseteo
+    setupResetPasswordValidation();
+ 
+    // NUEVO: Elementos para la barra de seguridad
+    const strengthContainer = document.getElementById("password-strength-container");
+    const strengthBar = document.getElementById("password-strength-bar");
+    const strengthText = document.getElementById("password-strength-text");
+
+    if (!emailInput || !passInput || !registerBtn || !strengthContainer) return;
 
     // Función auxiliar para crear mensajes de error debajo del input
     const createMsg = (input, id) => {
@@ -1711,14 +1815,22 @@ function setupRegisterValidation() {
 
     const validate = () => {
         const emailVal = emailInput.value.trim();
-        const passVal = passInput.value.trim();
+        const passVal = passInput.value; // No usar trim en contraseñas
 
         // Regex simple para validar email
         const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal);
-        // Contraseña válida si tiene 6 o más caracteres
-        const passIsValid = passVal.length >= 6;
+        
+        // Validaciones de contraseña
+        const hasLower = /[a-z]/.test(passVal);
+        const hasUpper = /[A-Z]/.test(passVal);
+        const hasNumber = /[0-9]/.test(passVal);
+        const hasSpecial = /[^A-Za-z0-9]/.test(passVal);
+        const isLongEnough = passVal.length >= 8;
+        const isNotTooLong = passVal.length <= 16;
 
-        // UI Email
+        const passIsValid = hasLower && hasUpper && hasNumber && hasSpecial && isLongEnough && isNotTooLong;
+
+        // UI Email (sin cambios)
         if (emailVal.length > 0) {
             if (emailIsValid) {
                 emailInput.classList.add("input-success");
@@ -1735,8 +1847,48 @@ function setupRegisterValidation() {
             emailMsg.style.display = "none";
         }
 
-        // UI Password
+        // UI Contraseña y Barra de Seguridad
         if (passVal.length > 0) {
+            strengthContainer.style.display = "block";
+            let strength = 0;
+            if (hasLower) strength++;
+            if (hasUpper) strength++;
+            if (hasNumber) strength++;
+            if (hasSpecial) strength++;
+            if (isLongEnough) strength++;
+
+            strengthBar.className = ""; // Limpiar clases de color
+            switch (strength) {
+                case 1:
+                    strengthBar.classList.add("weak");
+                    strengthBar.style.width = "20%";
+                    strengthText.innerText = "Muy débil";
+                    break;
+                case 2:
+                    strengthBar.classList.add("medium");
+                    strengthBar.style.width = "40%";
+                    strengthText.innerText = "Débil";
+                    break;
+                case 3:
+                    strengthBar.classList.add("strong");
+                    strengthBar.style.width = "60%";
+                    strengthText.innerText = "Regular";
+                    break;
+                case 4:
+                    strengthBar.classList.add("strong");
+                    strengthBar.style.width = "80%";
+                    strengthText.innerText = "Fuerte";
+                    break;
+                case 5:
+                    strengthBar.classList.add("very-strong");
+                    strengthBar.style.width = "100%";
+                    strengthText.innerText = "Muy Fuerte";
+                    break;
+                default:
+                    strengthBar.style.width = "0%";
+                    strengthText.innerText = "";
+            }
+
             if (passIsValid) {
                 passInput.classList.add("input-success");
                 passInput.classList.remove("input-error");
@@ -1744,10 +1896,17 @@ function setupRegisterValidation() {
             } else {
                 passInput.classList.add("input-error");
                 passInput.classList.remove("input-success");
-                passMsg.innerText = "Mínimo 6 caracteres";
+                if (passVal.length > 16) {
+                    passMsg.innerText = "Máximo 16 caracteres.";
+                } else if (passVal.length < 8) {
+                    passMsg.innerText = "Mínimo 8 caracteres.";
+                } else {
+                    passMsg.innerText = "Incluir Mayús, minús, núm y símbolo.";
+                }
                 passMsg.style.display = "block";
             }
         } else {
+            strengthContainer.style.display = "none";
             passInput.classList.remove("input-success", "input-error");
             passMsg.style.display = "none";
         }
@@ -1762,7 +1921,91 @@ function setupRegisterValidation() {
     emailInput.addEventListener("input", validate);
     passInput.addEventListener("input", validate);
     
+
     // Ejecutar una vez al inicio para establecer el estado inicial del botón
+    validate();
+}
+
+function setupResetPasswordValidation() {
+    const passInput = document.getElementById("resetPassword");
+    const resetBtn = document.querySelector("#reset-password-view button[onclick='resetPasswordWithToken()']");
+ 
+    const strengthContainer = document.getElementById("reset-password-strength-container");
+    const strengthBar = document.getElementById("reset-password-strength-bar");
+    const strengthText = document.getElementById("reset-password-strength-text");
+
+    if (!passInput || !resetBtn || !strengthContainer) return;
+
+    const createMsg = (input, id) => {
+        let msg = document.getElementById(id);
+        if (!msg) {
+            msg = document.createElement("small");
+            msg.id = id;
+            msg.style.display = "none";
+            msg.style.color = "var(--danger)";
+            msg.style.fontSize = "0.8rem";
+            msg.style.marginTop = "-10px";
+            msg.style.marginBottom = "10px";
+            msg.style.fontWeight = "500";
+            input.parentNode.insertBefore(msg, input.nextSibling);
+        }
+        return msg;
+    };
+
+    const passMsg = createMsg(passInput, "resetPassValMsg");
+
+    const validate = () => {
+        const passVal = passInput.value;
+
+        const hasLower = /[a-z]/.test(passVal);
+        const hasUpper = /[A-Z]/.test(passVal);
+        const hasNumber = /[0-9]/.test(passVal);
+        const hasSpecial = /[^A-Za-z0-9]/.test(passVal);
+        const isLongEnough = passVal.length >= 8;
+        const isNotTooLong = passVal.length <= 16;
+
+        const passIsValid = hasLower && hasUpper && hasNumber && hasSpecial && isLongEnough && isNotTooLong;
+
+        if (passVal.length > 0) {
+            strengthContainer.style.display = "block";
+            let strength = 0;
+            if (hasLower) strength++; if (hasUpper) strength++; if (hasNumber) strength++; if (hasSpecial) strength++; if (isLongEnough) strength++;
+
+            strengthBar.className = "";
+            switch (strength) {
+                case 1: strengthBar.className = "weak"; strengthBar.style.width = "20%"; strengthText.innerText = "Muy débil"; break;
+                case 2: strengthBar.className = "medium"; strengthBar.style.width = "40%"; strengthText.innerText = "Débil"; break;
+                case 3: strengthBar.className = "strong"; strengthBar.style.width = "60%"; strengthText.innerText = "Regular"; break;
+                case 4: strengthBar.className = "strong"; strengthBar.style.width = "80%"; strengthText.innerText = "Fuerte"; break;
+                case 5: strengthBar.className = "very-strong"; strengthBar.style.width = "100%"; strengthText.innerText = "Muy Fuerte"; break;
+                default: strengthBar.style.width = "0%"; strengthText.innerText = "";
+            }
+
+            if (passIsValid) {
+                passInput.classList.add("input-success");
+                passInput.classList.remove("input-error");
+                passMsg.style.display = "none";
+            } else {
+                passInput.classList.add("input-error");
+                passInput.classList.remove("input-success");
+                if (passVal.length > 16) passMsg.innerText = "Máximo 16 caracteres.";
+                else if (passVal.length < 8) passMsg.innerText = "Mínimo 8 caracteres.";
+                else passMsg.innerText = "Incluir Mayús, minús, núm y símbolo.";
+                passMsg.style.display = "block";
+            }
+        } else {
+            strengthContainer.style.display = "none";
+            passInput.classList.remove("input-success", "input-error");
+            passMsg.style.display = "none";
+        }
+
+        // El botón de reseteo depende solo de la contraseña (y del token que se ingresa manualmente)
+        resetBtn.disabled = !passIsValid;
+        resetBtn.style.opacity = passIsValid ? "1" : "0.6";
+        resetBtn.style.cursor = passIsValid ? "pointer" : "not-allowed";
+    };
+
+    passInput.addEventListener("input", validate);
     validate();
 }
 
@@ -1970,14 +2213,17 @@ function loadPaymentStatus() {
             div.innerHTML = `
                 <div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong>${pago.categoria}</strong>
-                        <button onclick="openEditModal(${pago.id}, '${pago.categoria}', ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6;">✏️</button>
+                        <strong>${escapeHtml(pago.categoria)}</strong>
+                        <button data-cat="${escapeHtml(pago.categoria)}" onclick="openEditModal(${pago.id}, this.dataset.cat, ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6;">✏️</button>
                     </div>
                     <div class="text-muted">Vence el día ${pago.dia_limite}</div>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 1.1rem; font-weight: bold;">${formatCurrency(pago.monto_esperado)}</div>
-                    <div style="margin-top: 5px;">${statusHtml}</div>
+                    <div style="margin-top: 5px;">
+                        ${statusHtml} 
+                        <button data-cat="${escapeHtml(pago.categoria)}" onclick="quickPay(this.dataset.cat, ${pago.monto_esperado})" class="btn btn-sm btn-success" style="margin-left:10px;">Pagar</button>
+                    </div>
                 </div>
             `;
             container.appendChild(div);
@@ -2044,6 +2290,92 @@ function confirmMainIncome() {
 }
 
 /* ======================
+   RESETEO DE CONTRASEÑA
+====================== */
+function requestPasswordReset() {
+    const email = document.getElementById("forgotEmail").value;
+    const msg = document.getElementById("forgotMsg");
+    const btn = document.querySelector("#forgot-password-view button[onclick='requestPasswordReset()']");
+
+    if (!email) {
+        return showToast("Por favor, ingresa tu correo.", "error");
+    }
+
+    btn.disabled = true;
+    btn.innerText = "Enviando...";
+    msg.innerText = "";
+
+    fetch(`${API}/request-password-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email })
+    })
+    .then(res => res.json())
+    .then(data => {
+        msg.innerText = data.message;
+        msg.style.color = "var(--success)";
+        showToast("Solicitud enviada. Revisa tu correo.", "success");
+        // Después de enviar, cambiamos a la vista para que ingrese el token.
+        setTimeout(() => {
+            showResetPassword();
+        }, 2500);
+    })
+    .catch(err => {
+        msg.innerText = "Error al solicitar el reseteo.";
+        msg.style.color = "var(--danger)";
+        showToast("Error en la solicitud.", "error");
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerText = "Enviar Token";
+    });
+}
+
+function resetPasswordWithToken() {
+    const token = document.getElementById("resetToken").value;
+    const password = document.getElementById("resetPassword").value;
+    const msg = document.getElementById("resetMsg");
+    const btn = document.querySelector("#reset-password-view button[onclick='resetPasswordWithToken()']");
+
+    btn.disabled = true;
+    btn.innerText = "Actualizando...";
+    msg.innerText = "";
+
+    fetch(`${API}/reset-password-with-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token, password: password })
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(errData => { throw new Error(errData.message || "Error desconocido."); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        msg.innerText = data.message;
+        msg.style.color = "var(--success)";
+        showToast(data.message, 'success');
+        // Redirigir al login después de un momento
+        setTimeout(() => {
+            showLogin();
+        }, 3000);
+    })
+    .catch(err => {
+        msg.innerText = err.message;
+        msg.style.color = "var(--danger)";
+        showToast(err.message, 'error');
+    })
+    .finally(() => {
+        // Solo reactivar si no fue exitoso
+        if (msg.style.color.includes("var(--danger)")) {
+            btn.disabled = false;
+            btn.innerText = "Actualizar Contraseña";
+        }
+    });
+}
+
+/* ======================
    EDICIÓN DE PAGOS RECURRENTES
 ====================== */
 function openEditModal(id, categoria, monto, dia) {
@@ -2053,7 +2385,7 @@ function openEditModal(id, categoria, monto, dia) {
     document.getElementById("editRecDay").value = dia;
     
     // Mostrar modal (usando flex para centrar gracias al CSS nuevo)
-    document.getElementById("edit-recurring-modal").style.display = "flex";
+    document.getElementById("edit-recurring-modal").classList.add("active");
 }
 
 function saveRecurringEdit() {
@@ -2073,7 +2405,7 @@ function saveRecurringEdit() {
     .then(res => res.json())
     .then(data => {
         showToast("Actualizado correctamente", 'success');
-        document.getElementById("edit-recurring-modal").style.display = "none";
+        closeModal("edit-recurring-modal");
         loadPaymentStatus(); // Recargar la lista para ver los cambios
     });
 }
@@ -2092,7 +2424,7 @@ function deleteRecurringExpense() {
     .then(res => res.json())
     .then(data => {
         showToast(data.message, 'success');
-        document.getElementById("edit-recurring-modal").style.display = "none";
+        closeModal("edit-recurring-modal");
         loadPaymentStatus(); // Actualizar la lista
     });
 }
@@ -2120,7 +2452,7 @@ function loadProfile() {
             // Actualizar nombre/email en el dropdown
             const dropdownHeader = document.getElementById("dropdownEmail");
             if (data.nombre) {
-                dropdownHeader.innerHTML = `<div style="font-size:1rem;">${data.nombre}</div><div style="font-size:0.8rem; font-weight:normal; opacity:0.8;">${data.email}</div>`;
+                dropdownHeader.innerHTML = `<div style="font-size:1rem;">${escapeHtml(data.nombre)}</div><div style="font-size:0.8rem; font-weight:normal; opacity:0.8;">${escapeHtml(data.email)}</div>`;
             } else {
                 dropdownHeader.innerText = data.email;
             }
@@ -2157,7 +2489,7 @@ function openEditProfileModal() {
     .then(data => {
         document.getElementById("editProfileName").value = data.nombre || "";
         document.getElementById("editProfilePassword").value = ""; // Contraseña siempre vacía por seguridad
-        document.getElementById("edit-profile-modal").style.display = "flex";
+        document.getElementById("edit-profile-modal").classList.add("active");
     });
 }
 
@@ -2180,7 +2512,7 @@ function saveProfileUpdate() {
     .then(res => res.json())
     .then(data => {
         showToast(data.message, "success");
-        document.getElementById("edit-profile-modal").style.display = "none";
+        closeModal("edit-profile-modal");
         loadProfile(); // Recargar para ver los cambios (ej. nombre en el menú)
     })
     .catch(err => showToast("Error al actualizar perfil", "error"));
@@ -2261,7 +2593,7 @@ function loadSavingsGoals() {
             
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0;">${meta.nombre}</h4>
+                    <h4 style="margin:0;">${escapeHtml(meta.nombre)}</h4>
                     <button onclick="deleteSavingsGoal(${meta.id})" style="background:none; border:none; cursor:pointer; color:var(--danger);">🗑️</button>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:var(--text-muted);">
@@ -2273,7 +2605,7 @@ function loadSavingsGoals() {
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <small class="text-muted">Meta: ${meta.fecha}</small>
-                    <button onclick="openUpdateSavingsModal(${meta.id}, '${meta.nombre}', ${meta.actual})" class="btn btn-sm btn-success">＋ Agregar $</button>
+                    <button data-name="${escapeHtml(meta.nombre)}" onclick="openUpdateSavingsModal(${meta.id}, this.dataset.name, ${meta.actual})" class="btn btn-sm btn-success">＋ Agregar $</button>
                 </div>
             `;
             container.appendChild(div);
@@ -2286,7 +2618,7 @@ function openAddSavingsModal() {
     document.getElementById("newSavingsTarget").value = "";
     document.getElementById("newSavingsDate").value = "";
     document.getElementById("isUsdGoal").checked = false;
-    document.getElementById("add-savings-modal").style.display = "flex";
+    document.getElementById("add-savings-modal").classList.add("active");
 }
 
 function saveSavingsGoal() {
@@ -2313,7 +2645,7 @@ function saveSavingsGoal() {
     })
     .then(data => {
         showToast("Meta creada", "success");
-        document.getElementById("add-savings-modal").style.display = "none";
+        closeModal("add-savings-modal");
         loadSavingsGoals();
     })
     .catch(err => {
@@ -2337,7 +2669,7 @@ function openUpdateSavingsModal(id, nombre, actual, moneda) {
         amountLabel.innerText = `Monto a agregar (${moneda})`;
     }
 
-    document.getElementById("update-savings-modal").style.display = "flex";
+    document.getElementById("update-savings-modal").classList.add("active");
 }
 
 function saveSavingsUpdate() {
@@ -2366,7 +2698,7 @@ function saveSavingsUpdate() {
     .then(res => res.json())
     .then(data => {
         showToast("Ahorro actualizado", "success");
-        document.getElementById("update-savings-modal").style.display = "none";
+        closeModal("update-savings-modal");
         loadSavingsGoals();
         if (deduct) {
             loadMovements(); // Recargar movimientos si se creó un gasto
