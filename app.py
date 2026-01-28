@@ -1296,7 +1296,7 @@ def chat_bot():
             
             if ultimo_gasto:
                 gasto_id, tipo, monto, fecha = ultimo_gasto
-                cursor.execute("DELETE FROM gastos WHERE id = ?", (gasto_id,))
+                cursor.execute("DELETE FROM gastos WHERE id = %s", (gasto_id,))
                 conn.commit()
                 response_text = f"🗑️ He eliminado tu último gasto: ${monto:,.0f} en {tipo} ({fecha})."
             else:
