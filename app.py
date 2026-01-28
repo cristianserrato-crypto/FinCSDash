@@ -482,8 +482,14 @@ def payment_status():
     cursor.execute("SELECT id, categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = %s", (user_id,))
     recurrentes = cursor.fetchall()
 
-    # Obtener gastos REALES hechos este mes
-    mes_actual = datetime.now().strftime("%Y-%m")
+    # --- MODIFICADO: Soporte para filtro por mes ---
+    month = request.args.get("month")
+    year = request.args.get("year")
+
+    if month and year:
+        mes_actual = f"{year}-{int(month):02d}"
+    else:
+        mes_actual = datetime.now().strftime("%Y-%m")
     
     # Calcular el TOTAL de gastos del mes (para la alerta de presupuesto)
     cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = %s AND fecha LIKE %s", (user_id, f"{mes_actual}%"))

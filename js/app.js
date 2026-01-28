@@ -53,14 +53,14 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="dashboard-container">
                 <!-- Logo y Aviso Demo (Nueva Cabecera Superior) -->
                 <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-                    <img src="./logo.png" alt="FinCSDash" style="height: 55px; width: auto;">
+                    <img src="./logo.png" alt="FinCSDash" style="height: 110px; width: auto;">
                     <div style="
                         background: #fff3cd;
                         color: #856404;
                         border: 1px solid #ffeeba;
                         padding: 12px 16px;
                         border-radius: 8px;
-                        font-size: 0.9rem;
+                        font-size: 0.75rem;
                         flex: 1;
                     ">
                         ⚠️ <strong>FinCSDash – Versión de prueba (Demo)</strong> — No ingreses datos reales o sensibles.
@@ -121,12 +121,14 @@ document.addEventListener("DOMContentLoaded", () => {
                             </div>
                         </div>
 
-                        <div class="card">
+                        <!-- SECCIÓN AUTOMATIZACIÓN COMENTADA TEMPORALMENTE
+                        <div class="card" style="display: none;">
                             <h4>Automatización</h4>
                             <div class="nav-buttons">
                                 <button onclick="runBot()" class="btn btn-secondary w-100">🤖 Ejecutar Bot</button>
                             </div>
                         </div>
+                        -->
                     </div>
 
                     <!-- Columna de Contenido -->
@@ -236,6 +238,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div id="payments-view" class="dashboard-view" style="display: none;">
                             <div class="card">
                                 <h4>📅 Estado de Pagos Mensuales</h4>
+                                
+                                <!-- NUEVO: Filtro de Mes -->
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label class="form-label">Filtrar por Mes</label>
+                                    <input type="month" id="paymentsMonthFilter" onchange="loadPaymentStatus()" class="form-control">
+                                </div>
+
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
                                     <div>
                                         <small class="text-muted">Ingreso Base</small>
@@ -244,10 +253,6 @@ document.addEventListener("DOMContentLoaded", () => {
                                         <div id="incomeStatusContainer" style="margin-top: 5px;">
                                             <!-- Contenido dinámico: botón o texto -->
                                         </div>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <small class="text-muted">Disponible Real (Aprox)</small>
-                                        <div id="realAvailableDisplay" style="font-weight: bold; font-size: 1.2rem; color: var(--primary);">--</div>
                                     </div>
                                 </div>
                                 <div id="paymentsListContainer"></div>
@@ -554,7 +559,7 @@ function renderChatMenu() {
     const container = document.getElementById("chat-messages");
     container.innerHTML = ""; // Limpiar mensajes anteriores (ej. el hardcoded)
 
-    appendMessage("👋 ¡Hola! Soy tu asistente financiero. Selecciona una opción rápida o escribe tu comando:", 'bot');
+    appendMessage("👋 ¡Hola! Soy tu asistente financiero. Selecciona una opción rápida:", 'bot');
 
     const optionsDiv = renderChatMenuOptions();
 
@@ -574,8 +579,7 @@ function renderChatMenuOptions() {
         { label: "💡 Frase", command: "Frase motivacional" },
         { label: "📅 Mis Pagos", command: "Pagos pendientes" },
         { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
-        { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" },
-        { label: "🔍 Gastos en...", command: "PARTIAL:Gastos en " } // Comando especial
+        { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" }
     ];
 
     options.forEach(option => {
@@ -1321,6 +1325,31 @@ function addExpense() {
         return showToast("Completa todos los campos", 'error');
     }
 
+    // MODIFICACIÓN: Si se marca como recurrente, SOLO se agrega a la lista de pagos mensuales (configuración),
+    // pero NO se registra como transacción pagada inmediatamente.
+    if (isRecurring) {
+        const day = parseInt(fecha.split('-')[2]); // Extraer el día de la fecha (YYYY-MM-DD)
+        
+        fetch(`${API}/add-recurring-expense`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({ categoria: tipo, monto: monto, dia: day })
+        })
+        .then(res => res.json())
+        .then(data => {
+            showToast("Gasto programado mensualmente (Pendiente de pago)", 'success');
+            document.getElementById("expenseAmount").value = "";
+            document.getElementById("isRecurringInput").checked = false; // Resetear checkbox
+            loadPaymentStatus(); // Actualizar la vista de pagos para ver el nuevo item
+        })
+        .catch(err => showToast("Error al programar gasto", 'error'));
+        
+        return; // Detenemos la ejecución aquí para no registrar el gasto todavía
+    }
+
     // Envía los datos al servidor (POST)
     fetch(`${API}/add-expense`, {
         method: "POST",
@@ -1332,36 +1361,15 @@ function addExpense() {
             tipo: tipo,
             monto: monto,
             fecha: fecha,
-            es_recurrente: isRecurring // Enviamos la marca al backend
+            es_recurrente: false // Siempre false aquí porque si fuera true entró al if de arriba
         })
     })
     .then(res => res.json())
     .then(data => {
-        // Si se marcó como recurrente, lo guardamos también en la lista de pagos fijos
-        if (isRecurring) {
-            const day = parseInt(fecha.split('-')[2]); // Extraer el día de la fecha (YYYY-MM-DD)
-            
-            fetch(`${API}/add-recurring-expense`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + token
-                },
-                body: JSON.stringify({ categoria: tipo, monto: monto, dia: day })
-            })
-            .then(() => {
-                showToast("Gasto registrado y programado mensualmente", 'success');
-                document.getElementById("expenseAmount").value = "";
-                document.getElementById("isRecurringInput").checked = false; // Resetear checkbox
-                loadMovements();
-                loadPaymentStatus(); // Actualizar la vista de pagos
-            });
-        } else {
-            showToast(data.message, 'success');
-            if (data.message.includes("agregado")) {
-                document.getElementById("expenseAmount").value = "";
-                loadMovements(); 
-            }
+        showToast(data.message, 'success');
+        if (data.message.includes("agregado")) {
+            document.getElementById("expenseAmount").value = "";
+            loadMovements(); 
         }
     })
     .catch(err => console.error(err));
@@ -1589,6 +1597,8 @@ document.addEventListener('click', function(event) {
     const menuToggle = document.querySelector('.menu-toggle');
     const profileDropdown = document.getElementById('profileDropdown');
     const profileAvatar = document.getElementById('profileAvatar');
+    const chatbotWindow = document.getElementById('chatbot-window');
+    const chatbotBtn = document.getElementById('chatbot-btn');
 
     // Si el menú está abierto, y el clic no fue dentro del menú ni en el botón
     if (navColumn && navColumn.classList.contains('active')) {
@@ -1602,6 +1612,13 @@ document.addEventListener('click', function(event) {
         if (!profileDropdown.contains(event.target) && !profileAvatar.contains(event.target)) {
             profileDropdown.classList.remove('active');
             profileAvatar.classList.remove('active');
+        }
+    }
+
+    // Cerrar chatbot si se hace clic fuera
+    if (chatbotWindow && chatbotWindow.style.display === 'flex') {
+        if (!chatbotWindow.contains(event.target) && (!chatbotBtn || !chatbotBtn.contains(event.target))) {
+            chatbotWindow.style.display = 'none';
         }
     }
 });
@@ -2114,7 +2131,24 @@ function completeOnboarding() {
 ====================== */
 function loadPaymentStatus() {
     const token = localStorage.getItem("token");
-    fetch(`${API}/payment-status`, {
+    
+    // --- NUEVO: Manejo del filtro ---
+    const filterInput = document.getElementById("paymentsMonthFilter");
+    let url = `${API}/payment-status`;
+    
+    // Si el input existe pero está vacío, poner el mes actual por defecto
+    if (filterInput && !filterInput.value) {
+        const now = new Date();
+        const monthStr = (now.getMonth() + 1).toString().padStart(2, '0');
+        filterInput.value = `${now.getFullYear()}-${monthStr}`;
+    }
+
+    if (filterInput && filterInput.value) {
+        const [year, month] = filterInput.value.split("-");
+        url += `?month=${month}&year=${year}`;
+    }
+
+    fetch(url, {
         headers: { "Authorization": "Bearer " + token }
     })
     .then(res => res.json())
@@ -2150,17 +2184,18 @@ function loadPaymentStatus() {
 
         document.getElementById("baseIncomeDisplay").innerText = formatCurrency(data.ingreso_base);
         
-        // Calcular disponible real (Ingreso Base - Gastos Comprometidos)
-        // Nota: Esto es una proyección. El balance real es Ingresos Reales - Gastos Reales.
-        const realAvailable = data.ingreso_base - data.total_comprometido;
-        document.getElementById("realAvailableDisplay").innerText = formatCurrency(realAvailable);
+        // Determinar si estamos viendo el mes actual para mostrar/ocultar botón de ingreso
+        const today = new Date();
+        const currentMonthStr = today.toISOString().slice(0, 7); // YYYY-MM
+        const selectedMonthStr = filterInput ? filterInput.value : currentMonthStr;
+        const isCurrentMonth = selectedMonthStr === currentMonthStr;
 
         // Lógica para el botón de confirmar ingreso
         const incomeStatusContainer = document.getElementById("incomeStatusContainer");
         if (incomeStatusContainer) {
             if (data.income_confirmed_this_month) {
                 incomeStatusContainer.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 500;">✓ Ingreso de este mes ya registrado</span>`;
-            } else if (data.ingreso_base > 0) {
+            } else if (data.ingreso_base > 0 && isCurrentMonth) {
                 incomeStatusContainer.innerHTML = `<button onclick="confirmMainIncome()" class="btn btn-success btn-sm">Confirmar Ingreso Recibido</button>`;
             } else {
                 incomeStatusContainer.innerHTML = ""; // No mostrar nada si no hay ingreso base
@@ -2175,8 +2210,11 @@ function loadPaymentStatus() {
             return;
         }
 
-        const today = new Date();
         const currentDay = today.getDate();
+        // Determinar estado del mes (pasado, futuro o actual) para la lógica de colores
+        let monthState = 'current';
+        if (selectedMonthStr < currentMonthStr) monthState = 'past';
+        else if (selectedMonthStr > currentMonthStr) monthState = 'future';
 
         data.pagos.forEach(pago => {
             const div = document.createElement("div");
@@ -2194,18 +2232,31 @@ function loadPaymentStatus() {
                 statusText = 'Pagado';
                 statusColor = 'var(--success)';
             } else {
-                if (daysLeft < 0) {
+                if (monthState === 'past') {
+                    // Si es mes pasado y no pagó -> Vencido
                     statusIcon = '⚠️';
-                    statusText = `Vencido hace ${Math.abs(daysLeft)} días`;
+                    statusText = 'No pagado (Vencido)';
                     statusColor = 'var(--danger)';
-                } else if (daysLeft === 0) {
-                    statusIcon = '❗';
-                    statusText = 'Vence Hoy';
-                    statusColor = 'orange';
-                } else {
+                } else if (monthState === 'future') {
+                    // Si es mes futuro -> Pendiente normal
                     statusIcon = '⏳';
-                    statusText = `Faltan ${daysLeft} días`;
+                    statusText = `Vence el día ${pago.dia_limite}`;
                     statusColor = 'var(--primary)';
+                } else {
+                    // Mes actual (Lógica original)
+                    if (daysLeft < 0) {
+                        statusIcon = '⚠️';
+                        statusText = `Vencido hace ${Math.abs(daysLeft)} días`;
+                        statusColor = 'var(--danger)';
+                    } else if (daysLeft === 0) {
+                        statusIcon = '❗';
+                        statusText = 'Vence Hoy';
+                        statusColor = 'orange';
+                    } else {
+                        statusIcon = '⏳';
+                        statusText = `Faltan ${daysLeft} días`;
+                        statusColor = 'var(--primary)';
+                    }
                 }
             }
 
