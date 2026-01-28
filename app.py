@@ -380,14 +380,23 @@ def check_initial_profile():
     email = get_jwt_identity()
     conn = conectar_db()
     cursor = conn.cursor()
-    # Check if name, last name or age are missing
-    cursor.execute("SELECT nombre, apellidos, edad FROM usuarios WHERE email = ?", (email,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    # If any of the fields is None or empty string for text fields, or age is 0/None
-    needs_profile_info = not (row and row[0] and row[1] and row[2])
+
+    try:
+        # Intenta la consulta ideal primero
+        cursor.execute("SELECT nombre, apellidos, edad FROM usuarios WHERE email = ?", (email,))
+        row = cursor.fetchone()
+        conn.close()
         
+        # Si alguna de las columnas es Nula o está vacía, el perfil necesita información.
+        needs_profile_info = not (row and row[0] and row[1] and row[2])
+
+    except sqlite3.OperationalError as e:
+        # Si una columna no existe (como 'apellidos'), es una señal clara de que el perfil está incompleto.
+        # Esto hace que la app sea resistente a problemas de migración de la base de datos.
+        print(f"ADVERTENCIA: Error al revisar el perfil, probablemente por un desajuste en la base de datos: {e}")
+        conn.close()
+        needs_profile_info = True # Forzamos a que se complete el perfil.
+
     return jsonify({"needs_profile_info": needs_profile_info}), 200
 
 @app.route("/save-initial-profile", methods=["POST"])
