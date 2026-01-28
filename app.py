@@ -415,9 +415,27 @@ def save_initial_profile():
     conn = conectar_db()
     cursor = conn.cursor()
     
-    cursor.execute("UPDATE usuarios SET nombre = ?, apellidos = ?, edad = ? WHERE email = ?", (nombre, apellidos, edad, email))
-
-    conn.commit()
+    try:
+        cursor.execute("UPDATE usuarios SET nombre = ?, apellidos = ?, edad = ? WHERE email = ?", (nombre, apellidos, edad, email))
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "no such column" in str(e):
+            print(f"⚠️ Migración de emergencia en save_profile: {e}")
+            # Intentar agregar las columnas faltantes al vuelo
+            try: cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
+            except: pass
+            try: cursor.execute("ALTER TABLE usuarios ADD COLUMN apellidos TEXT")
+            except: pass
+            try: cursor.execute("ALTER TABLE usuarios ADD COLUMN edad INTEGER")
+            except: pass
+            conn.commit()
+            # Reintentar la actualización
+            cursor.execute("UPDATE usuarios SET nombre = ?, apellidos = ?, edad = ? WHERE email = ?", (nombre, apellidos, edad, email))
+            conn.commit()
+        else:
+            conn.close()
+            return jsonify({"message": "Error de base de datos", "error": str(e)}), 500
+            
     conn.close()
     return jsonify({"message": "Información de perfil guardada correctamente"}), 200
 
