@@ -1,116 +1,88 @@
 """
 database.py
-Manejo de base de datos SQLite para FinCSDash
+Manejo de base de datos PostgreSQL para FinCSDash
 """
 
-import sqlite3
 import os
+import psycopg2
 
+# La URL de conexión se obtiene de las variables de entorno de Render.
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-
-DB_NAME = "fincsdash.db"
-
-# ⚠️ ¡CUIDADO! La siguiente línea borraba la base de datos cada vez que se reiniciaba el servidor.
-# La he comentado para que los usuarios que registres no se borren durante las pruebas.
-# if os.path.exists(DB_NAME):
-#     os.remove(DB_NAME)
+# Función para conectar a la base de datos.
 def conectar_db():
-    return sqlite3.connect(DB_NAME)
+    # Conecta a PostgreSQL usando la URL de Render.
+    if not DATABASE_URL:
+        raise Exception("No se ha configurado la variable de entorno DATABASE_URL.")
+    return psycopg2.connect(DATABASE_URL)
 
+# Función principal para crear las tablas si no existen.
 def crear_tablas():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    # ⚠️ BORRAR TABLAS ANTERIORES (PARA PRUEBAS)
-    # cursor.execute("DROP TABLE IF EXISTS ingresos")
-    # cursor.execute("DROP TABLE IF EXISTS gastos")
-    # cursor.execute("DROP TABLE IF EXISTS categorias")
-    # cursor.execute("DROP TABLE IF EXISTS usuarios")
-
     # Tabla usuarios
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            codigo_verificacion TEXT,
-            verificado INTEGER DEFAULT 0
+            id SERIAL PRIMARY KEY,                -- SERIAL es el autoincremental de PostgreSQL.
+            email TEXT UNIQUE NOT NULL,           -- Correo electrónico (no se puede repetir).
+            password TEXT NOT NULL,               -- Contraseña (encriptada).
+            codigo_verificacion TEXT,             -- Código temporal para verificar email.
+            verificado INTEGER DEFAULT 0,         -- 0 = No verificado, 1 = Verificado.
+            ingreso_mensual REAL DEFAULT 0,
+            dia_pago INTEGER DEFAULT 1,
+            foto_perfil TEXT,
+            nombre TEXT,
+            apellidos TEXT,
+            edad INTEGER,
+            reset_token TEXT,
+            reset_token_expires TEXT
         )
     """)
-
-    # --- MIGRACIÓN AUTOMÁTICA (Solución definitiva para Render) ---
-    # Este bloque se asegura de que la tabla 'usuarios' tenga todas las columnas necesarias,
-    # incluso si la base de datos en el servidor es una versión antigua.
-    cursor.execute("PRAGMA table_info(usuarios)")
-    columnas_existentes = [col[1] for col in cursor.fetchall()]
-
-    if 'verificado' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'verificado' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0")
-
-    if 'codigo_verificacion' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'codigo_verificacion' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN codigo_verificacion TEXT")
-
-    if 'ingreso_mensual' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'ingreso_mensual' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN ingreso_mensual REAL DEFAULT 0")
-
-    if 'dia_pago' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'dia_pago' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN dia_pago INTEGER DEFAULT 1")
-
-    if 'foto_perfil' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'foto_perfil' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT")
-
-    if 'nombre' not in columnas_existentes:
-        print("MIGRANDO: Agregando columna 'nombre' a la tabla 'usuarios'.")
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre TEXT")
-    # ---------------------------------------------------------------
 
     # Tabla ingresos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ingresos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER,
-            monto REAL,
-            fecha TEXT,
-            categoria TEXT,
-            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER, -- Relaciona el ingreso con un usuario específico.
+            monto REAL,         -- Cantidad de dinero (permite decimales).
+            fecha TEXT,         -- Fecha en formato texto (YYYY-MM-DD).
+            categoria TEXT DEFAULT 'Ingreso',
+            FOREIGN KEY(usuario_id) REFERENCES usuarios(id) -- Clave foránea para integridad.
         )
     """)
 
     # Tabla gastos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
-            tipo TEXT,
-            monto REAL,
+            tipo TEXT,          -- Categoría del gasto (ej: Comida).
+            monto REAL,         
             fecha TEXT,
-            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+            es_recurrente INTEGER DEFAULT 0,
+            FOREIGN KEY(usuario_id) REFERENCES usuarios(id) 
         )
     """)
 
     # Tabla categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER DEFAULT 0,
-            nombre TEXT NOT NULL,
-            UNIQUE(usuario_id, nombre)
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER DEFAULT 0, -- 0 significa categoría global para todos.
+            nombre TEXT NOT NULL,         -- Nombre de la categoría.
+            UNIQUE(usuario_id, nombre)    -- Evita duplicados para el mismo usuario.
         )
     """)
 
     # Tabla gastos recurrentes (Configuración inicial)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos_recurrentes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
             categoria TEXT,
             monto REAL,
-            dia_limite INTEGER,
+            dia_limite INTEGER, -- Día del mes límite para pagar (1-31).
             FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)
@@ -118,42 +90,22 @@ def crear_tablas():
     # Tabla metas de ahorro
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS metas_ahorro (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
             nombre TEXT,
-            monto_objetivo REAL,
-            monto_actual REAL DEFAULT 0,
-            fecha_limite TEXT,
+            monto_objetivo REAL, -- Cuánto quiere ahorrar.
+            monto_actual REAL DEFAULT 0, -- Cuánto lleva ahorrado.
+            fecha_limite TEXT,   -- Para cuándo lo quiere.
+            moneda TEXT DEFAULT 'COP',
             FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
         )
     """)
 
     # Insertar categorías predefinidas
     categorias_default = ["Salario", "Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
+    # `ON CONFLICT DO NOTHING` es el equivalente a `INSERT OR IGNORE` de SQLite.
     for cat in categorias_default:
-        cursor.execute("INSERT OR IGNORE INTO categorias (usuario_id, nombre) VALUES (0, ?)", (cat,))
+        cursor.execute("INSERT INTO categorias (usuario_id, nombre) VALUES (0, %s) ON CONFLICT (usuario_id, nombre) DO NOTHING", (cat,))
 
-    # --- MIGRACIÓN PARA INGRESOS ---
-    cursor.execute("PRAGMA table_info(ingresos)")
-    cols_ingresos = [col[1] for col in cursor.fetchall()]
-    if 'categoria' not in cols_ingresos:
-        print("MIGRANDO: Agregando columna 'categoria' a la tabla 'ingresos'.")
-        cursor.execute("ALTER TABLE ingresos ADD COLUMN categoria TEXT DEFAULT 'Ingreso'")
-
-    # --- MIGRACIÓN PARA GASTOS (RECURRENTE) ---
-    cursor.execute("PRAGMA table_info(gastos)")
-    cols_gastos = [col[1] for col in cursor.fetchall()]
-    if 'es_recurrente' not in cols_gastos:
-        print("MIGRANDO: Agregando columna 'es_recurrente' a la tabla 'gastos'.")
-        cursor.execute("ALTER TABLE gastos ADD COLUMN es_recurrente INTEGER DEFAULT 0")
-
-    # --- MIGRACIÓN PARA METAS DE AHORRO ---
-    cursor.execute("PRAGMA table_info(metas_ahorro)")
-    cols_metas = [col[1] for col in cursor.fetchall()]
-    if 'moneda' not in cols_metas:
-        print("MIGRANDO: Agregando columna 'moneda' a la tabla 'metas_ahorro'.")
-        cursor.execute("ALTER TABLE metas_ahorro ADD COLUMN moneda TEXT DEFAULT 'COP'")
-
-    # 👉 COMMIT ANTES DE CERRAR
     conn.commit()
     conn.close()
