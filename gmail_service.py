@@ -10,8 +10,8 @@ def enviar_correo(destinatario, asunto, cuerpo):
     Requiere configurar las variables de entorno MAIL_USERNAME y MAIL_PASSWORD.
     """
     # 1. Obtener credenciales de las variables de entorno
-    remitente = os.environ.get("fincsdash@gmail.com")
-    password = os.environ.get("199507130202Cr*")
+    remitente = os.environ.get("MAIL_USERNAME")
+    password = os.environ.get("MAIL_PASSWORD")
 
     if not remitente or not password:
         print("⚠️ Error: No se han configurado las credenciales de correo (MAIL_USERNAME, MAIL_PASSWORD).")

@@ -1154,7 +1154,7 @@ def export_pdf():
         # Agregar Logo
         # Buscamos logo.png en la carpeta raíz (un nivel arriba de backend)
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(base_dir, "..", "logo.png")
+        logo_path = os.path.join(base_dir, "logo.png") # CORRECCIÓN: El logo está en la misma carpeta raíz
         
         # Verificar si existe antes de agregarlo
         if os.path.exists(logo_path):
