@@ -2180,49 +2180,60 @@ function loadPaymentStatus() {
 
         data.pagos.forEach(pago => {
             const div = document.createElement("div");
-            div.className = "card";
+            div.className = "card"; // Usamos la base de la tarjeta
             div.style.padding = "15px";
             div.style.marginBottom = "10px";
-            div.style.display = "flex";
-            div.style.justifyContent = "space-between";
-            div.style.alignItems = "center";
-            div.style.borderLeft = "5px solid #ccc";
+            div.style.transition = "transform 0.2s ease, box-shadow 0.2s ease";
 
-            let statusHtml = "";
             let daysLeft = pago.dia_limite - currentDay;
-            
+
+            // --- Definir Estado, Icono y Color ---
+            let statusIcon, statusText, statusColor;
             if (pago.pagado) {
-                div.style.borderLeftColor = "var(--success)";
-                statusHtml = `<span style="color: var(--success); font-weight: bold;">✅ PAGADO</span>`;
+                statusIcon = '✅';
+                statusText = 'Pagado';
+                statusColor = 'var(--success)';
             } else {
                 if (daysLeft < 0) {
-                    div.style.borderLeftColor = "var(--danger)";
-                    statusHtml = `<span style="color: var(--danger); font-weight: bold;">⚠ VENCIDO (${Math.abs(daysLeft)} días)</span>`;
+                    statusIcon = '⚠️';
+                    statusText = `Vencido hace ${Math.abs(daysLeft)} días`;
+                    statusColor = 'var(--danger)';
                 } else if (daysLeft === 0) {
-                    div.style.borderLeftColor = "orange";
-                    statusHtml = `<span style="color: orange; font-weight: bold;">⚠ HOY</span>`;
+                    statusIcon = '❗';
+                    statusText = 'Vence Hoy';
+                    statusColor = 'orange';
                 } else {
-                    div.style.borderLeftColor = "var(--primary)";
-                    statusHtml = `<span style="color: var(--primary); font-weight: bold;">⏳ Faltan ${daysLeft} días</span>`;
+                    statusIcon = '⏳';
+                    statusText = `Faltan ${daysLeft} días`;
+                    statusColor = 'var(--primary)';
                 }
-                
-                // Botón para pagar rápido
-                statusHtml += ` <button onclick="quickPay('${pago.categoria}', ${pago.monto_esperado})" class="btn btn-sm btn-success" style="margin-left:10px;">Pagar</button>`;
             }
 
+            // Aplicar borde de color
+            div.style.borderLeft = `4px solid ${statusColor}`;
+
+            // --- Construir HTML Interno con un diseño de Grid ---
             div.innerHTML = `
-                <div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong>${escapeHtml(pago.categoria)}</strong>
-                        <button data-cat="${escapeHtml(pago.categoria)}" onclick="openEditModal(${pago.id}, this.dataset.cat, ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6;">✏️</button>
+                <div style="display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 15px; width: 100%;">
+                    <!-- Icono de Estado -->
+                    <div style="font-size: 24px;">${statusIcon}</div>
+                    
+                    <!-- Info Principal -->
+                    <div>
+                        <div style="font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <span>${escapeHtml(pago.categoria)}</span>
+                            <button data-cat="${escapeHtml(pago.categoria)}" onclick="openEditModal(${pago.id}, this.dataset.cat, ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6; padding:0;">✏️</button>
+                        </div>
+                        <div style="font-size: 0.9rem; color: ${statusColor}; font-weight: 500;">${statusText}</div>
                     </div>
-                    <div class="text-muted">Vence el día ${pago.dia_limite}</div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 1.1rem; font-weight: bold;">${formatCurrency(pago.monto_esperado)}</div>
-                    <div style="margin-top: 5px;">
-                        ${statusHtml} 
-                        <button data-cat="${escapeHtml(pago.categoria)}" onclick="quickPay(this.dataset.cat, ${pago.monto_esperado})" class="btn btn-sm btn-success" style="margin-left:10px;">Pagar</button>
+                    
+                    <!-- Monto y Acción -->
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 5px;">${formatCurrency(pago.monto_esperado)}</div>
+                        ${!pago.pagado 
+                            ? `<button onclick="quickPay('${escapeHtml(pago.categoria)}', ${pago.monto_esperado})" class="btn btn-sm btn-success">Pagar</button>` 
+                            : `<div style="font-size: 0.8rem; color: var(--text-muted);">Día de pago: ${pago.dia_limite}</div>`
+                        }
                     </div>
                 </div>
             `;
@@ -2714,6 +2725,15 @@ function deleteSavingsGoal(id) {
     .then(() => loadSavingsGoals());
 }
 
+/* ======================
+   UTILIDADES MODALES
+====================== */
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove("active");
+    }
+}
 /* ======================
    BOT (SELENIUM)
 ====================== */
