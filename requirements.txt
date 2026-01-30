@@ -13,5 +13,5 @@ requests
 fpdf
 # Servidor HTTP de producción para ejecutar Python en la nube (Render).
 gunicorn
-# Conector para la base de datos PostgreSQL.
-psycopg2-binary
+# SDK de AWS para subir archivos a S3.
+boto3

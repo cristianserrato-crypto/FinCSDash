@@ -6,7 +6,7 @@ let API = "http://127.0.0.1:5000"; // Por defecto Local
 if (window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
     // ⚠️ IMPORTANTE: Si usas GitHub Pages para el frontend y Render para el backend,
     // debes poner aquí la URL exacta de tu backend en Render.
-    API = "https://fincsdash-backend.onrender.com"; // URL de producción actualizada
+    API = ""; // Correcto: Al estar vacío, usa automáticamente la IP pública de tu EC2
 }
 
 // Variables globales para guardar información mientras la página está abierta
