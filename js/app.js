@@ -1,13 +1,6 @@
 // Define la dirección del servidor (Backend).
-// Por defecto asume que estás en tu máquina local.
-let API = "http://127.0.0.1:5000"; // Por defecto Local
-
-// Verifica si la página NO está en localhost (es decir, está en Render).
-if (window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
-    // ⚠️ IMPORTANTE: Si usas GitHub Pages para el frontend y Render para el backend,
-    // debes poner aquí la URL exacta de tu backend en Render.
-    API = "http://3.15.166.231:5000";
-}
+// Se inyecta desde el HTML para producción.
+const API = window.API_URL || "https://api.fincsdash.online";
 
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
@@ -1667,7 +1660,7 @@ function logout() {
 window.onload = () => {
     // Inicializa la librería de Google con tu ID de cliente
     google.accounts.id.initialize({
-        client_id: "741392813029-8iavkp2iqcntpb1m4d16h8t02c028naf.apps.googleusercontent.com",
+        client_id: window.GOOGLE_CLIENT_ID,
         callback: handleGoogle
     });
 

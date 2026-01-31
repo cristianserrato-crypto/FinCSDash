@@ -10,11 +10,12 @@ import psycopg2
 def conectar_db():
     # Conecta a PostgreSQL usando variables de entorno
     return psycopg2.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        database=os.environ.get("DB_NAME", "fincsdash"),
-        user=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASSWORD", "password"),
-        port=os.environ.get("DB_PORT", "5432")
+        host=os.environ["DB_HOST"],
+        database=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        port=os.environ.get("DB_PORT", "5432"), # Puerto 5432 es estándar, se puede dejar default
+        sslmode="require" # Obligatorio para AWS RDS
     )
 
 # Función principal para crear las tablas si no existen.
