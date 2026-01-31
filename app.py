@@ -13,7 +13,7 @@ from flask_cors import CORS
 import random
 import secrets
 import uuid
-import sqlite3
+import psycopg2
 import boto3
 import base64
 from datetime import datetime, timedelta, timezone
@@ -102,7 +102,7 @@ def register():
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, verificado FROM usuarios WHERE email = ?", # SQLite usa ? en lugar de %s
+            "SELECT id, verificado FROM usuarios WHERE email = %s",
             (email,)
         )
         usuario_existente = cursor.fetchone()
@@ -118,14 +118,14 @@ def register():
             else:
                 cursor.execute("""
                     UPDATE usuarios
-                    SET password = ?, verificado = 1, codigo_verificacion = NULL
-                    WHERE email = ?
+                    SET password = %s, verificado = 1, codigo_verificacion = NULL
+                    WHERE email = %s
                 """, (hashed_password, email))
         else:
             # Si no existe, lo creamos directamente como verificado.
             cursor.execute("""
                 INSERT INTO usuarios (email, password, codigo_verificacion, verificado)
-                VALUES (?, ?, NULL, 1)
+                VALUES (%s, %s, NULL, 1)
             """, (email, hashed_password))
 
         conn.commit()
@@ -159,7 +159,7 @@ def verify():
 
     cursor.execute("""
         SELECT id FROM usuarios
-        WHERE email = ? AND codigo_verificacion = ?
+        WHERE email = %s AND codigo_verificacion = %s
     """, (email, codigo))
 
     user = cursor.fetchone()
@@ -168,7 +168,7 @@ def verify():
         cursor.execute("""
             UPDATE usuarios
             SET verificado = 1
-            WHERE email = ?
+            WHERE email = %s
         """, (email,))
         conn.commit()
         conn.close()
@@ -192,7 +192,7 @@ def resend_code():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, verificado FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id, verificado FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -205,7 +205,7 @@ def resend_code():
 
     # Generar nuevo código y actualizarlo en la BD
     new_code = str(random.randint(100000, 999999))
-    cursor.execute("UPDATE usuarios SET codigo_verificacion = ? WHERE email = ?", (new_code, email))
+    cursor.execute("UPDATE usuarios SET codigo_verificacion = %s WHERE email = %s", (new_code, email))
     conn.commit()
     conn.close()
 
@@ -237,7 +237,7 @@ def login():
     # --- MODIFICADO: Ya no se comprueba el estado de verificación ---
     cursor.execute("""
         SELECT id, password FROM usuarios
-        WHERE email = ?
+        WHERE email = %s
     """, (email,))
 
     user = cursor.fetchone()
@@ -264,7 +264,7 @@ def request_password_reset():
 
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if user:
@@ -272,7 +272,7 @@ def request_password_reset():
         token = secrets.token_urlsafe(32)
         expires = datetime.now(timezone.utc) + timedelta(hours=1)
         
-        cursor.execute("UPDATE usuarios SET reset_token = ?, reset_token_expires = ? WHERE email = ?", (token, expires.isoformat(), email))
+        cursor.execute("UPDATE usuarios SET reset_token = %s, reset_token_expires = %s WHERE email = %s", (token, expires.isoformat(), email))
         conn.commit()
 
         # Enviar correo (asumiendo que el servicio de correo está configurado)
@@ -315,7 +315,7 @@ def reset_password_with_token():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT email, reset_token_expires FROM usuarios WHERE reset_token = ?", (token,))
+    cursor.execute("SELECT email, reset_token_expires FROM usuarios WHERE reset_token = %s", (token,))
     user = cursor.fetchone()
 
     if not user or datetime.now(timezone.utc) > datetime.fromisoformat(user[1]):
@@ -323,7 +323,7 @@ def reset_password_with_token():
         return jsonify({"message": "Token inválido o expirado."}), 400
 
     hashed_password = generate_password_hash(new_password)
-    cursor.execute("UPDATE usuarios SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE email = ?", (hashed_password, user[0]))
+    cursor.execute("UPDATE usuarios SET password = %s, reset_token = NULL, reset_token_expires = NULL WHERE email = %s", (hashed_password, user[0]))
     conn.commit()
     conn.close()
 
@@ -349,13 +349,13 @@ def google_login():
         conn = conectar_db()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+        cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
         user = cursor.fetchone()
 
         if not user:
             cursor.execute("""
                 INSERT INTO usuarios (email, password, verificado)
-                VALUES (?, ?, 1) 
+                VALUES (%s, %s, 1) 
             """, (email, str(uuid.uuid4()))) # Contraseña aleatoria segura
             conn.commit()
 
@@ -384,7 +384,7 @@ def check_initial_profile():
     cursor = conn.cursor()
 
     # Con PostgreSQL, las columnas siempre existirán gracias a `crear_tablas`.
-    cursor.execute("SELECT nombre, apellidos, edad FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT nombre, apellidos, edad FROM usuarios WHERE email = %s", (email,))
     row = cursor.fetchone()
     conn.close()
     
@@ -409,7 +409,7 @@ def save_initial_profile():
     cursor = conn.cursor()
     
     # La migración de emergencia ya no es necesaria con PostgreSQL
-    cursor.execute("UPDATE usuarios SET nombre = ?, apellidos = ?, edad = ? WHERE email = ?", (nombre, apellidos, edad, email))
+    cursor.execute("UPDATE usuarios SET nombre = %s, apellidos = %s, edad = %s WHERE email = %s", (nombre, apellidos, edad, email))
     conn.commit()
             
     conn.close()
@@ -425,7 +425,7 @@ def check_onboarding():
     conn = conectar_db()
     cursor = conn.cursor()
     # Verificamos si el usuario ya configuró su ingreso mensual (indicador de que completó el onboarding)
-    cursor.execute("SELECT ingreso_mensual FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT ingreso_mensual FROM usuarios WHERE email = %s", (email,))
     row = cursor.fetchone()
     conn.close()
     
@@ -448,20 +448,20 @@ def save_onboarding():
     conn = conectar_db()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
 
     # 1. Actualizar Usuario
-    cursor.execute("UPDATE usuarios SET ingreso_mensual = ?, dia_pago = ? WHERE id = ?", (ingreso, dia_pago, user_id))
+    cursor.execute("UPDATE usuarios SET ingreso_mensual = %s, dia_pago = %s WHERE id = %s", (ingreso, dia_pago, user_id))
 
     # 2. Guardar Gastos Recurrentes
     # Primero limpiamos los anteriores si existieran para evitar duplicados en re-configuración
-    cursor.execute("DELETE FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+    cursor.execute("DELETE FROM gastos_recurrentes WHERE usuario_id = %s", (user_id,))
     
     for gasto in gastos_fijos:
         cursor.execute("""
             INSERT INTO gastos_recurrentes (usuario_id, categoria, monto, dia_limite)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (user_id, gasto['categoria'], gasto['monto'], gasto['dia']))
 
     conn.commit()
@@ -475,13 +475,13 @@ def payment_status():
     conn = conectar_db()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
     user_id = user[0]
     ingreso_base = user[1] or 0
 
     # Obtener gastos recurrentes configurados
-    cursor.execute("SELECT id, categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+    cursor.execute("SELECT id, categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = %s", (user_id,))
     recurrentes = cursor.fetchall()
 
     # --- MODIFICADO: Soporte para filtro por mes ---
@@ -494,18 +494,18 @@ def payment_status():
         mes_actual = datetime.now().strftime("%Y-%m")
     
     # Calcular el TOTAL de gastos del mes (para la alerta de presupuesto)
-    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ? AND fecha LIKE ?", (user_id, f"{mes_actual}%"))
+    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = %s AND fecha LIKE %s", (user_id, f"{mes_actual}%"))
     total_gastos_mes = cursor.fetchone()[0] or 0
 
     cursor.execute("""
         SELECT tipo, SUM(monto) FROM gastos 
-        WHERE usuario_id = ? AND fecha LIKE ?
+        WHERE usuario_id = %s AND fecha LIKE %s
         GROUP BY tipo
     """, (user_id, f"{mes_actual}%"))
     gastos_reales = {row[0]: row[1] for row in cursor.fetchall()}
 
     # Verificar si ya se registró un ingreso este mes (Salario específicamente)
-    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ? AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
+    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = %s AND fecha LIKE %s AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
     income_confirmed_this_month = cursor.fetchone() is not None
 
     estado_pagos = []
@@ -537,10 +537,10 @@ def edit_recurring_expense(id):
     cursor = conn.cursor()
     
     # Verificar que el usuario sea dueño del registro
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
 
-    cursor.execute("UPDATE gastos_recurrentes SET monto = ?, dia_limite = ? WHERE id = ? AND usuario_id = ?", (monto, dia, id, user_id))
+    cursor.execute("UPDATE gastos_recurrentes SET monto = %s, dia_limite = %s WHERE id = %s AND usuario_id = %s", (monto, dia, id, user_id))
     
     if cursor.rowcount == 0:
         conn.close()
@@ -557,10 +557,10 @@ def delete_recurring_expense(id):
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
 
-    cursor.execute("DELETE FROM gastos_recurrentes WHERE id = ? AND usuario_id = ?", (id, user_id))
+    cursor.execute("DELETE FROM gastos_recurrentes WHERE id = %s AND usuario_id = %s", (id, user_id))
     
     conn.commit()
     conn.close()
@@ -574,12 +574,12 @@ def add_recurring_expense():
     
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
     
     cursor.execute("""
         INSERT INTO gastos_recurrentes (usuario_id, categoria, monto, dia_limite)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (user_id, data['categoria'], data['monto'], data['dia']))
     
     conn.commit()
@@ -594,7 +594,7 @@ def confirm_main_income():
     cursor = conn.cursor()
 
     # 1. Obtener datos del usuario
-    cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
     if not user or not user[1] or user[1] <= 0:
         conn.close()
@@ -605,14 +605,14 @@ def confirm_main_income():
 
     # 2. Verificar que no se haya confirmado ya este mes para evitar duplicados
     mes_actual = datetime.now().strftime("%Y-%m")
-    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = ? AND fecha LIKE ? AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
+    cursor.execute("SELECT id FROM ingresos WHERE usuario_id = %s AND fecha LIKE %s AND categoria = 'Salario'", (user_id, f"{mes_actual}%"))
     if cursor.fetchone():
         conn.close()
         return jsonify({"message": "El ingreso de este mes ya fue registrado."}), 400
 
     # 3. Registrar el ingreso
     fecha_hoy = datetime.now().date().isoformat()
-    cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (?, ?, ?, 'Salario')", (user_id, ingreso_base, fecha_hoy))
+    cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (%s, %s, %s, 'Salario')", (user_id, ingreso_base, fecha_hoy))
 
     conn.commit()
     conn.close()
@@ -628,7 +628,7 @@ def get_profile():
     email = get_jwt_identity()
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT email, foto_perfil, nombre FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT email, foto_perfil, nombre FROM usuarios WHERE email = %s", (email,))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -647,11 +647,11 @@ def update_profile():
     cursor = conn.cursor()
 
     if nombre is not None: # Permitir string vacío si quiere borrarlo, pero no None
-        cursor.execute("UPDATE usuarios SET nombre = ? WHERE email = ?", (nombre, email))
+        cursor.execute("UPDATE usuarios SET nombre = %s WHERE email = %s", (nombre, email))
     
     if password:
         hashed_password = generate_password_hash(password)
-        cursor.execute("UPDATE usuarios SET password = ? WHERE email = ?", (hashed_password, email))
+        cursor.execute("UPDATE usuarios SET password = %s WHERE email = %s", (hashed_password, email))
 
     conn.commit()
     conn.close()
@@ -705,7 +705,7 @@ def update_photo():
     
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET foto_perfil = ? WHERE email = ?", (foto_url, email))
+    cursor.execute("UPDATE usuarios SET foto_perfil = %s WHERE email = %s", (foto_url, email))
     conn.commit()
     conn.close()
     return jsonify({"message": "Foto actualizada"}), 200
@@ -716,7 +716,7 @@ def delete_photo():
     email = get_jwt_identity()
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET foto_perfil = NULL WHERE email = ?", (email,))
+    cursor.execute("UPDATE usuarios SET foto_perfil = NULL WHERE email = %s", (email,))
     conn.commit()
     conn.close()
     return jsonify({"message": "Foto eliminada"}), 200
@@ -733,12 +733,12 @@ def get_categories():
     cursor = conn.cursor()
 
     # Obtener ID del usuario
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
     usuario_id = user[0] if user else 0
 
     # Traer categorías globales (0) y las del usuario
-    cursor.execute("SELECT nombre FROM categorias WHERE usuario_id = 0 OR usuario_id = ?", (usuario_id,))
+    cursor.execute("SELECT nombre FROM categorias WHERE usuario_id = 0 OR usuario_id = %s", (usuario_id,))
     categorias = [row[0] for row in cursor.fetchall()]
     conn.close()
     return jsonify(categorias), 200
@@ -760,15 +760,15 @@ def add_category():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     usuario_id = cursor.fetchone()[0]
 
     try:
-        cursor.execute("INSERT INTO categorias (usuario_id, nombre) VALUES (?, ?)", (usuario_id, nombre))
+        cursor.execute("INSERT INTO categorias (usuario_id, nombre) VALUES (%s, %s)", (usuario_id, nombre))
         conn.commit()
         conn.close()
         return jsonify({"message": "Categoría agregada"}), 201
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"message": "Esa categoría ya existe"}), 400
@@ -803,7 +803,7 @@ def add_income():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -814,7 +814,7 @@ def add_income():
 
     cursor.execute("""
         INSERT INTO ingresos (usuario_id, monto, fecha, categoria)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (usuario_id, monto, fecha, categoria))
 
     conn.commit()
@@ -853,7 +853,7 @@ def add_expense():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -864,7 +864,7 @@ def add_expense():
 
     cursor.execute("""
         INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (usuario_id, tipo, monto, fecha, es_recurrente))
 
     conn.commit()
@@ -904,7 +904,7 @@ def edit_expense(id):
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -914,12 +914,12 @@ def edit_expense(id):
     usuario_id = user[0]
 
     # Verificar que el gasto exista y pertenezca al usuario
-    cursor.execute("SELECT id FROM gastos WHERE id = ? AND usuario_id = ?", (id, usuario_id))
+    cursor.execute("SELECT id FROM gastos WHERE id = %s AND usuario_id = %s", (id, usuario_id))
     if not cursor.fetchone():
         conn.close()
         return jsonify({"message": "Gasto no encontrado o no autorizado"}), 404
 
-    cursor.execute("UPDATE gastos SET tipo = ?, monto = ?, fecha = ? WHERE id = ?", (tipo, monto, fecha, id))
+    cursor.execute("UPDATE gastos SET tipo = %s, monto = %s, fecha = %s WHERE id = %s", (tipo, monto, fecha, id))
     conn.commit()
     conn.close()
 
@@ -937,7 +937,7 @@ def delete_expense(id):
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -947,12 +947,12 @@ def delete_expense(id):
     usuario_id = user[0]
 
     # Verificar que el gasto exista y pertenezca al usuario
-    cursor.execute("SELECT id FROM gastos WHERE id = ? AND usuario_id = ?", (id, usuario_id))
+    cursor.execute("SELECT id FROM gastos WHERE id = %s AND usuario_id = %s", (id, usuario_id))
     if not cursor.fetchone():
         conn.close()
         return jsonify({"message": "Gasto no encontrado o no autorizado"}), 404
 
-    cursor.execute("DELETE FROM gastos WHERE id = ?", (id,))
+    cursor.execute("DELETE FROM gastos WHERE id = %s", (id,))
     conn.commit()
     conn.close()
 
@@ -970,7 +970,7 @@ def delete_income(id):
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -980,12 +980,12 @@ def delete_income(id):
     usuario_id = user[0]
 
     # Verificar que el ingreso exista y pertenezca al usuario
-    cursor.execute("SELECT id FROM ingresos WHERE id = ? AND usuario_id = ?", (id, usuario_id))
+    cursor.execute("SELECT id FROM ingresos WHERE id = %s AND usuario_id = %s", (id, usuario_id))
     if not cursor.fetchone():
         conn.close()
         return jsonify({"message": "Ingreso no encontrado o no autorizado"}), 404
 
-    cursor.execute("DELETE FROM ingresos WHERE id = ?", (id,))
+    cursor.execute("DELETE FROM ingresos WHERE id = %s", (id,))
     conn.commit()
     conn.close()
 
@@ -1002,11 +1002,11 @@ def get_savings_goals():
     conn = conectar_db()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
 
     # MODIFICADO: Añadir la columna 'moneda'
-    cursor.execute("SELECT id, nombre, monto_objetivo, monto_actual, fecha_limite, moneda FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
+    cursor.execute("SELECT id, nombre, monto_objetivo, monto_actual, fecha_limite, moneda FROM metas_ahorro WHERE usuario_id = %s", (user_id,))
     # MODIFICADO: Añadir 'moneda' al diccionario
     metas = [{"id": r[0], "nombre": r[1], "objetivo": r[2], "actual": r[3], "fecha": r[4], "moneda": r[5]} for r in cursor.fetchall()]
     
@@ -1021,7 +1021,7 @@ def add_savings_goal():
     
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
     
     # MODIFICADO: Obtener la moneda del request, con 'COP' como default
@@ -1030,7 +1030,7 @@ def add_savings_goal():
     # MODIFICADO: Añadir 'moneda' al INSERT
     cursor.execute("""
         INSERT INTO metas_ahorro (usuario_id, nombre, monto_objetivo, monto_actual, fecha_limite, moneda)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """, (user_id, data['nombre'], data['objetivo'], data.get('actual', 0), data['fecha'], moneda))
     
     conn.commit()
@@ -1050,19 +1050,19 @@ def update_savings_goal(id):
     
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
     
-    cursor.execute("UPDATE metas_ahorro SET monto_actual = ? WHERE id = ? AND usuario_id = ?", (nuevo_monto, id, user_id))
+    cursor.execute("UPDATE metas_ahorro SET monto_actual = %s WHERE id = %s AND usuario_id = %s", (nuevo_monto, id, user_id))
     
     # Crear gasto si el usuario lo pidió
     if crear_gasto and monto_agregado > 0:
-        cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = ?", (id,))
+        cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = %s", (id,))
         meta_row = cursor.fetchone()
         meta_nombre = meta_row[0] if meta_row else "Meta"
         
         fecha = datetime.now().strftime("%Y-%m-%d")
-        cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", 
+        cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, %s, %s, %s, 0)", 
                        (user_id, f"Ahorro: {meta_nombre}", monto_agregado, fecha))
 
     conn.commit()
@@ -1075,10 +1075,10 @@ def delete_savings_goal(id):
     email = get_jwt_identity()
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user_id = cursor.fetchone()[0]
     
-    cursor.execute("DELETE FROM metas_ahorro WHERE id = ? AND usuario_id = ?", (id, user_id))
+    cursor.execute("DELETE FROM metas_ahorro WHERE id = %s AND usuario_id = %s", (id, user_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Meta eliminada"}), 200
@@ -1095,7 +1095,7 @@ def balance():
     conn = conectar_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     if not user:
@@ -1104,10 +1104,10 @@ def balance():
 
     usuario_id = user[0]
 
-    cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (usuario_id,))
+    cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = %s", (usuario_id,))
     total_ingresos = cursor.fetchone()[0] or 0
 
-    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (usuario_id,))
+    cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = %s", (usuario_id,))
     total_gastos = cursor.fetchone()[0] or 0
 
     conn.close()
@@ -1286,7 +1286,7 @@ def chat_bot():
 
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     user = cursor.fetchone()
     if not user:
         conn.close()
@@ -1298,9 +1298,9 @@ def chat_bot():
 
     # 1. CONSULTAR SALDO / DISPONIBLE
     if "saldo" in message or "balance" in message or "disponible" in message or "me queda" in message or "sobra" in message:
-        cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (user_id,))
+        cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = %s", (user_id,))
         ingresos = cursor.fetchone()[0] or 0
-        cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (user_id,))
+        cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = %s", (user_id,))
         gastos = cursor.fetchone()[0] or 0
         balance = ingresos - gastos
         if "disponible" in message or "me queda" in message or "sobra" in message:
@@ -1323,7 +1323,7 @@ def chat_bot():
             
             cursor.execute("""
                 SELECT SUM(monto) FROM gastos 
-                WHERE usuario_id = ? AND tipo = ? AND fecha LIKE ?
+                WHERE usuario_id = %s AND tipo = %s AND fecha LIKE %s
             """, (user_id, categoria, f"{mes_actual}%"))
             
             total_categoria = cursor.fetchone()[0] or 0
@@ -1338,12 +1338,12 @@ def chat_bot():
     # 3. ELIMINAR ÚLTIMO GASTO
     elif "elimina" in message or "borra" in message:
         if "último gasto" in message or "ultimo gasto" in message:
-            cursor.execute("SELECT id, tipo, monto, fecha FROM gastos WHERE usuario_id = ? ORDER BY id DESC LIMIT 1", (user_id,))
+            cursor.execute("SELECT id, tipo, monto, fecha FROM gastos WHERE usuario_id = %s ORDER BY id DESC LIMIT 1", (user_id,))
             ultimo_gasto = cursor.fetchone()
             
             if ultimo_gasto:
                 gasto_id, tipo, monto, fecha = ultimo_gasto
-                cursor.execute("DELETE FROM gastos WHERE id = ?", (gasto_id,))
+                cursor.execute("DELETE FROM gastos WHERE id = %s", (gasto_id,))
                 conn.commit()
                 response_text = f"🗑️ He eliminado tu último gasto: ${monto:,.0f} en {tipo} ({fecha})."
             else:
@@ -1357,7 +1357,7 @@ def chat_bot():
         cursor.execute("""
             SELECT tipo, SUM(monto) as total 
             FROM gastos 
-            WHERE usuario_id = ? AND fecha LIKE ? 
+            WHERE usuario_id = %s AND fecha LIKE %s 
             GROUP BY tipo 
             ORDER BY total DESC 
             LIMIT 1
@@ -1372,7 +1372,7 @@ def chat_bot():
 
     # 5. CONSULTAR TOTAL AHORRADO
     elif "ahorrado" in message or "ahorros" in message or "mis ahorros" in message:
-        cursor.execute("SELECT SUM(monto_actual) FROM metas_ahorro WHERE usuario_id = ?", (user_id,))
+        cursor.execute("SELECT SUM(monto_actual) FROM metas_ahorro WHERE usuario_id = %s", (user_id,))
         total_ahorrado = cursor.fetchone()[0] or 0
         
         if total_ahorrado > 0:
@@ -1389,7 +1389,7 @@ def chat_bot():
             nombre_meta = match.group(2).strip()
 
             # Buscar la meta (búsqueda parcial)
-            cursor.execute("SELECT id, nombre FROM metas_ahorro WHERE usuario_id = ? AND nombre LIKE ?", (user_id, f"%{nombre_meta}%"))
+            cursor.execute("SELECT id, nombre FROM metas_ahorro WHERE usuario_id = %s AND nombre LIKE %s", (user_id, f"%{nombre_meta}%"))
             meta = cursor.fetchone()
 
             if meta:
@@ -1416,15 +1416,15 @@ def chat_bot():
             meta_id = int(meta_id_str)
             
             # Actualizar Meta
-            cursor.execute("UPDATE metas_ahorro SET monto_actual = monto_actual + ? WHERE id = ?", (monto, meta_id))
+            cursor.execute("UPDATE metas_ahorro SET monto_actual = monto_actual + %s WHERE id = %s", (monto, meta_id))
             
             msg_extra = ""
             if action == "yes":
                 # Registrar Gasto
                 fecha = datetime.now().strftime("%Y-%m-%d")
-                cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = ?", (meta_id,))
+                cursor.execute("SELECT nombre FROM metas_ahorro WHERE id = %s", (meta_id,))
                 meta_name = cursor.fetchone()[0]
-                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", (user_id, f"Ahorro: {meta_name}", monto, fecha))
+                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, %s, %s, %s, 0)", (user_id, f"Ahorro: {meta_name}", monto, fecha))
                 msg_extra = " y se registró como gasto"
 
             conn.commit()
@@ -1446,7 +1446,7 @@ def chat_bot():
 
     # 9. ESTADO DE PAGOS
     elif "pagos" in message or "pendientes" in message:
-        cursor.execute("SELECT categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = ?", (user_id,))
+        cursor.execute("SELECT categoria, monto, dia_limite FROM gastos_recurrentes WHERE usuario_id = %s", (user_id,))
         recurrentes = cursor.fetchall()
         if recurrentes:
             response_text = "📅 Tus pagos recurrentes:\n"
@@ -1476,19 +1476,19 @@ def chat_bot():
             fecha = datetime.now().strftime("%Y-%m-%d")
 
             if es_gasto:
-                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (?, ?, ?, ?, 0)", (user_id, categoria, monto, fecha))
+                cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, %s, %s, %s, 0)", (user_id, categoria, monto, fecha))
                 
                 # Verificar si se superó el 80% tras este gasto
-                cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = ?", (user_id,))
+                cursor.execute("SELECT SUM(monto) FROM ingresos WHERE usuario_id = %s", (user_id,))
                 total_ingresos = cursor.fetchone()[0] or 0
-                cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = ?", (user_id,))
+                cursor.execute("SELECT SUM(monto) FROM gastos WHERE usuario_id = %s", (user_id,))
                 total_gastos = cursor.fetchone()[0] or 0
                 
                 response_text = f"✅ Gasto registrado: ${monto:,.0f} en {categoria}."
                 if total_ingresos > 0 and (total_gastos / total_ingresos) > 0.8:
                     response_text += " ⚠️ ¡Cuidado! Has superado el 80% de tus ingresos."
             else:
-                cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (?, ?, ?, ?)", (user_id, monto, fecha, categoria))
+                cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (%s, %s, %s, %s)", (user_id, monto, fecha, categoria))
                 response_text = f"✅ Ingreso registrado: ${monto:,.0f} en {categoria}."
             
             conn.commit()

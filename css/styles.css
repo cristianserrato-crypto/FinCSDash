@@ -37,6 +37,7 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover { background: #718096; }
 /* Oculta el header original, ya que el dashboard inyecta el suyo */
 header {
     display: none;
+    text-align: center;
 }
 
 /* ESTILOS PARA LOGIN/REGISTRO */

@@ -6,7 +6,7 @@ let API = "http://127.0.0.1:5000"; // Por defecto Local
 if (window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
     // ⚠️ IMPORTANTE: Si usas GitHub Pages para el frontend y Render para el backend,
     // debes poner aquí la URL exacta de tu backend en Render.
-    API = ""; // Correcto: Al estar vacío, usa automáticamente la IP pública de tu EC2
+    API = "http://3.15.166.231:5000";
 }
 
 // Variables globales para guardar información mientras la página está abierta
@@ -1845,7 +1845,7 @@ function setupRegisterValidation() {
             msg.style.display = "none";
             msg.style.color = "var(--danger)";
             msg.style.fontSize = "0.8rem";
-            msg.style.marginTop = "-10px";
+            msg.style.marginTop = "5px";
             msg.style.marginBottom = "10px";
             msg.style.fontWeight = "500";
             input.parentNode.insertBefore(msg, input.nextSibling);
@@ -1987,7 +1987,7 @@ function setupResetPasswordValidation() {
             msg.style.display = "none";
             msg.style.color = "var(--danger)";
             msg.style.fontSize = "0.8rem";
-            msg.style.marginTop = "-10px";
+            msg.style.marginTop = "5px";
             msg.style.marginBottom = "10px";
             msg.style.fontWeight = "500";
             input.parentNode.insertBefore(msg, input.nextSibling);

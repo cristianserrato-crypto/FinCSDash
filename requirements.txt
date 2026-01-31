@@ -15,3 +15,5 @@ fpdf
 gunicorn
 # SDK de AWS para subir archivos a S3.
 boto3
+# Driver para PostgreSQL
+psycopg2-binary

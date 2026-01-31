@@ -3,15 +3,19 @@ database.py
 Manejo de base de datos PostgreSQL para FinCSDash
 """
 
-import sqlite3
-
-# Nombre del archivo de base de datos local
-DATABASE_NAME = "fincsdash.db"
+import os
+import psycopg2
 
 # Función para conectar a la base de datos.
 def conectar_db():
-    # Conecta a SQLite
-    return sqlite3.connect(DATABASE_NAME)
+    # Conecta a PostgreSQL usando variables de entorno
+    return psycopg2.connect(
+        host=os.environ.get("DB_HOST", "localhost"),
+        database=os.environ.get("DB_NAME", "fincsdash"),
+        user=os.environ.get("DB_USER", "postgres"),
+        password=os.environ.get("DB_PASSWORD", "password"),
+        port=os.environ.get("DB_PORT", "5432")
+    )
 
 # Función principal para crear las tablas si no existen.
 def crear_tablas():
@@ -21,7 +25,7 @@ def crear_tablas():
     # Tabla usuarios
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, -- Autoincremental en SQLite.
+            id SERIAL PRIMARY KEY,                -- Autoincremental en PostgreSQL.
             email TEXT UNIQUE NOT NULL,           -- Correo electrónico (no se puede repetir).
             password TEXT NOT NULL,               -- Contraseña (encriptada).
             codigo_verificacion TEXT,             -- Código temporal para verificar email.
@@ -40,7 +44,7 @@ def crear_tablas():
     # Tabla ingresos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ingresos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER, -- Relaciona el ingreso con un usuario específico.
             monto REAL,         -- Cantidad de dinero (permite decimales).
             fecha TEXT,         -- Fecha en formato texto (YYYY-MM-DD).
@@ -52,7 +56,7 @@ def crear_tablas():
     # Tabla gastos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
             tipo TEXT,          -- Categoría del gasto (ej: Comida).
             monto REAL,         
@@ -65,7 +69,7 @@ def crear_tablas():
     # Tabla categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER DEFAULT 0, -- 0 significa categoría global para todos.
             nombre TEXT NOT NULL,         -- Nombre de la categoría.
             UNIQUE(usuario_id, nombre)    -- Evita duplicados para el mismo usuario.
@@ -75,7 +79,7 @@ def crear_tablas():
     # Tabla gastos recurrentes (Configuración inicial)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gastos_recurrentes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
             categoria TEXT,
             monto REAL,
@@ -87,7 +91,7 @@ def crear_tablas():
     # Tabla metas de ahorro
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS metas_ahorro (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario_id INTEGER,
             nombre TEXT,
             monto_objetivo REAL, -- Cuánto quiere ahorrar.
@@ -102,7 +106,7 @@ def crear_tablas():
     categorias_default = ["Salario", "Alimentación", "Transporte", "Vivienda", "Servicios", "Entretenimiento", "Salud", "Educación", "Otros"]
     # Usamos INSERT OR IGNORE para SQLite
     for cat in categorias_default:
-        cursor.execute("INSERT OR IGNORE INTO categorias (usuario_id, nombre) VALUES (0, ?)", (cat,))
+        cursor.execute("INSERT INTO categorias (usuario_id, nombre) VALUES (0, %s) ON CONFLICT DO NOTHING", (cat,))
 
     conn.commit()
     conn.close()
