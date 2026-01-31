@@ -1,19 +1,9 @@
-# Framework web principal para crear la aplicación y las rutas (backend).
-Flask
-# Extensión para permitir que el frontend (navegador) haga peticiones al backend desde otro origen/puerto.
-Flask-Cors
-# Librería para manejar la seguridad y autenticación mediante Tokens (JWT).
-Flask-JWT-Extended
-# Librerías de Google para verificar los tokens de inicio de sesión con Gmail.
+flask
+flask-cors
+flask-jwt-extended
+psycopg2-binary
+gunicorn
 google-auth
 google-auth-oauthlib
-# Librería para hacer peticiones HTTP a otros servidores (usada internamente por Google Auth).
+google-auth-httplib2
 requests
-# Librería para generar archivos PDF (usada en los reportes).
-fpdf
-# Servidor HTTP de producción para ejecutar Python en la nube (Render).
-gunicorn
-# SDK de AWS para subir archivos a S3.
-boto3
-# Driver para PostgreSQL
-psycopg2-binary
