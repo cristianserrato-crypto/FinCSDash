@@ -2,6 +2,9 @@
 // Se inyecta desde el HTML para producción.
 const API = window.API_URL || "https://api.fincsdash.online";
 
+
+
+
 // Variables globales para guardar información mientras la página está abierta
 let currentUser = null;
 let currentMovements = []; // Para guardar los datos y poder ordenarlos

@@ -1,0 +1,38 @@
+# Core backend
+Flask==3.1.2
+gunicorn==23.0.0
+
+# CORS y JWT
+flask-cors==6.0.2
+flask-jwt-extended==4.7.1
+PyJWT==2.11.0
+
+# Base de datos PostgreSQL
+psycopg2-binary==2.9.11
+
+# AWS (S3, etc.)
+boto3==1.42.39
+
+# Google OAuth
+google-auth==2.48.0
+google-auth-oauthlib==1.2.2
+google-auth-httplib2==0.3.0
+requests-oauthlib==2.0.0
+
+# Utilidades HTTP
+requests==2.32.5
+httpx==0.31.2
+
+# PDF
+fpdf==1.7.2
+
+# Seguridad / cifrado
+cryptography==46.0.4
+
+# Templates (Flask)
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+
+# Otros necesarios
+itsdangerous==2.2.0
+Werkzeug==3.1.3

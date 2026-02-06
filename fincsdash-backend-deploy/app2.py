@@ -11,12 +11,11 @@ Listo para AWS (EC2 / App Runner)
 import os
 import re
 import uuid
-import random
-import secrets
+import base64
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+from flask import Flask, request, jsonify
+from flask_cors import CORS, cross_origin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask_jwt_extended import (
@@ -33,9 +32,6 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 import boto3
-import base64
-import io
-from fpdf import FPDF
 
 # =========================
 # IMPORTS INTERNOS
@@ -49,10 +45,19 @@ from bot import obtener_frase_motivacional
 # =========================
 app = Flask(__name__)
 
-# --- VARIABLES DE ENTORNO OBLIGATORIAS ---
+# CORS global para todo el backend
+CORS(
+    app,
+    origins=["https://fincsdash.online"],
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"]
+)
+
+# =========================
+# VARIABLES DE ENTORNO
+# =========================
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")
 
 if not JWT_SECRET_KEY:
     raise Exception("JWT_SECRET_KEY no configurado")
@@ -60,13 +65,11 @@ if not JWT_SECRET_KEY:
 if not GOOGLE_CLIENT_ID:
     raise Exception("GOOGLE_CLIENT_ID no configurado")
 
-# --- JWT ---
+# =========================
+# JWT
+# =========================
 app.config["JWT_SECRET_KEY"] = JWT_SECRET_KEY
 jwt = JWTManager(app)
-
-# --- CORS ---
-origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
-CORS(app, origins=origins, supports_credentials=True)
 
 # =========================
 # CREAR TABLAS
@@ -200,83 +203,25 @@ def profile():
     return jsonify(data), 200
 
 # =========================
-# BALANCE
+# CHECK INITIAL PROFILE (FIX CORS)
 # =========================
-@app.route("/balance", methods=["GET"])
+@app.route("/check-initial-profile", methods=["GET", "OPTIONS"])
+@cross_origin(origins=["https://fincsdash.online"], supports_credentials=True)
 @jwt_required()
-def balance():
+def check_initial_profile():
     email = get_jwt_identity()
 
     conn = conectar_db()
     cursor = conn.cursor()
-
-    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-    user_id = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM ingresos WHERE usuario_id = %s", (user_id,))
-    ingresos = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM gastos WHERE usuario_id = %s", (user_id,))
-    gastos = cursor.fetchone()[0]
-
+    cursor.execute("SELECT nombre FROM usuarios WHERE email = %s", (email,))
+    row = cursor.fetchone()
     conn.close()
 
-    return jsonify({
-        "ingresos": ingresos,
-        "gastos": gastos,
-        "balance": ingresos - gastos
-    }), 200
+    return jsonify({"hasProfile": bool(row and row[0])}), 200
 
 # =========================
-# FOTO PERFIL (S3)
+# HEALTH
 # =========================
-@app.route("/update-photo", methods=["POST"])
-@jwt_required()
-def update_photo():
-    email = get_jwt_identity()
-    foto_base64 = request.json.get("foto")
-
-    if not foto_base64:
-        return jsonify({"message": "Imagen requerida"}), 400
-
-    s3 = boto3.client("s3")
-    bucket = os.environ.get("AWS_BUCKET_NAME")
-    region = os.environ.get("AWS_REGION")
-
-    if not bucket or not region:
-        return jsonify({"message": "S3 no configurado"}), 500
-
-    image_bytes = base64.b64decode(foto_base64)
-    key = f"profiles/{uuid.uuid4()}.png"
-
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=image_bytes,
-        ContentType="image/png",
-        ACL="public-read"
-    )
-
-    url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
-
-    conn = conectar_db()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET foto_perfil = %s WHERE email = %s", (url, email))
-    conn.commit()
-    conn.close()
-
-    return jsonify({"foto": url}), 200
-
-# =========================
-# BOT
-# =========================
-@app.route("/run-bot", methods=["GET"])
-@jwt_required()
-def run_bot():
-    return jsonify(obtener_frase_motivacional()), 200
-
-# =========================
-# START
-# =========================
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+@app.route("/health")
+def health():
+    return "ok", 200

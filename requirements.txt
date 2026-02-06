@@ -1,9 +1,0 @@
-flask
-flask-cors
-flask-jwt-extended
-psycopg2-binary
-gunicorn
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-requests

@@ -1,5 +1,0 @@
-ID de cliente
-741392813029-8iavkp2iqcntpb1m4d16h8t02c028naf.apps.googleusercontent.com
-
-Secreto del cliente
-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

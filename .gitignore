@@ -1,7 +1,0 @@
-# Base de datos SQLite (Ignorar para no subir datos privados)
-# El asterisco (*) es un comodín. Significa: ignora cualquier archivo que termine en .db
-*.db
-
-# Archivos temporales de Python (Cache)
-# Ignora la carpeta __pycache__ donde Python guarda archivos compilados para ir más rápido.
-__pycache__/
