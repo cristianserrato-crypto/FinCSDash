@@ -185,7 +185,7 @@ def google_login():
         conn.close()
 
         jwt_token = create_access_token(identity=email)
-        return jsonify({"token": jwt_token}), 200
+        return jsonify({"token": jwt_token, "email": email, "message": "Login exitoso"}), 200
 
     except Exception:
         return jsonify({"message": "Token Google inválido"}), 401
@@ -288,10 +288,16 @@ def reset_password_with_token():
 # =========================
 # PERFIL
 # =========================
-@app.route("/get-profile", methods=["GET"])
-@jwt_required()
+@app.route("/get-profile", methods=["GET", "OPTIONS"])
+@cross_origin()
+@jwt_required(optional=True)
 def get_profile():
+    if request.method == "OPTIONS":
+        return "", 200
+
     email = get_jwt_identity()
+    if not email:
+        return jsonify({"message": "Token requerido"}), 401
 
     conn = conectar_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -468,7 +474,12 @@ def get_movements():
     conn = conectar_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify([]), 200
+
+    user_id = row["id"]
     
     query_ingresos = "SELECT id, monto, fecha, categoria, 'Ingreso' as tipo, 0 as es_recurrente FROM ingresos WHERE usuario_id=%s"
     query_gastos = "SELECT id, monto, fecha, tipo as categoria, 'Gasto' as tipo, es_recurrente FROM gastos WHERE usuario_id=%s"
@@ -727,31 +738,184 @@ def delete_saving(id):
 @jwt_required()
 def chat():
     msg = request.json.get("message", "").lower()
+    email = get_jwt_identity()
     
-    # Lógica simple de respuestas (puedes expandir esto con IA real si quieres)
-    response = "No entendí eso. Intenta 'Saldo', 'Mayor gasto' o 'Frase'."
+    response_text = "No entendí eso. Intenta 'Saldo', 'Mayor gasto' o 'Frase'."
     options = []
     
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    # Obtener ID de usuario
+    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"response": "Usuario no encontrado", "options": []}), 200
+    user_id = row[0]
+
     if "saldo" in msg:
-        return balance() # Reutiliza la función de balance
+        cursor.execute("SELECT COALESCE(SUM(monto),0) FROM ingresos WHERE usuario_id = %s", (user_id,))
+        ingresos = cursor.fetchone()[0]
+        cursor.execute("SELECT COALESCE(SUM(monto),0) FROM gastos WHERE usuario_id = %s", (user_id,))
+        gastos = cursor.fetchone()[0]
+        balance_val = ingresos - gastos
+        response_text = f"💰 Tu saldo actual es: ${balance_val:,.0f}"
         
-    if "frase" in msg:
-        return run_bot()
+    elif "mayor gasto" in msg:
+        cursor.execute("SELECT tipo, monto, fecha FROM gastos WHERE usuario_id=%s ORDER BY monto DESC LIMIT 1", (user_id,))
+        row = cursor.fetchone()
+        if row:
+            response_text = f"🏆 Tu mayor gasto fue en {row[0]} por ${row[1]:,.0f} el {row[2]}."
+        else:
+            response_text = "No tienes gastos registrados aún."
+            
+    elif "ahorrado" in msg:
+        cursor.execute("SELECT COALESCE(SUM(monto_actual),0) FROM metas_ahorro WHERE usuario_id=%s", (user_id,))
+        ahorro = cursor.fetchone()[0]
+        response_text = f"🐷 Tienes ahorrado un total de ${ahorro:,.0f} en tus metas."
+
+    elif "frase" in msg:
+        bot_data = obtener_frase_motivacional()
+        response_text = f"💡 {bot_data['dato_extraido']}"
+
+    elif "pagos" in msg:
+        now = datetime.now()
+        month = str(now.month).zfill(2)
+        year = str(now.year)
+        date_filter = f"{year}-{month}-%"
         
-    return jsonify({"response": response, "options": options}), 200
+        cursor.execute("SELECT categoria, dia_limite FROM gastos_recurrentes WHERE usuario_id=%s", (user_id,))
+        recurrentes = cursor.fetchall()
+        
+        cursor.execute("SELECT tipo FROM gastos WHERE usuario_id=%s AND es_recurrente=1 AND fecha LIKE %s", (user_id, date_filter))
+        pagados = [r[0] for r in cursor.fetchall()]
+        
+        pendientes = []
+        for cat, dia in recurrentes:
+            if cat not in pagados:
+                pendientes.append(f"- {cat} (Día {dia})")
+        
+        if pendientes:
+            response_text = "📅 Pagos pendientes este mes:\n" + "\n".join(pendientes)
+        else:
+            response_text = "✅ ¡Estás al día con tus pagos recurrentes!"
+
+    elif "elimina el último gasto" in msg:
+        cursor.execute("SELECT id, tipo, monto FROM gastos WHERE usuario_id=%s ORDER BY id DESC LIMIT 1", (user_id,))
+        last_expense = cursor.fetchone()
+        if last_expense:
+            eid, etipo, emonto = last_expense
+            cursor.execute("DELETE FROM gastos WHERE id=%s", (eid,))
+            conn.commit()
+            response_text = f"🗑️ Eliminado último gasto: {etipo} por ${emonto:,.0f}"
+        else:
+            response_text = "No hay gastos para eliminar."
+
+    conn.close()
+        
+    return jsonify({"response": response_text, "options": options}), 200
+
+@app.route("/export-pdf", methods=["GET"])
+@jwt_required()
+def export_pdf():
+    email = get_jwt_identity()
+    month = request.args.get("month")
+    year = request.args.get("year")
+    
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Get user info
+    cursor.execute("SELECT id, nombre, apellidos FROM usuarios WHERE email=%s", (email,))
+    user = cursor.fetchone()
+    user_id = user["id"]
+    name = f"{user['nombre']} {user['apellidos']}"
+    
+    # Build query
+    query = """
+        SELECT fecha, categoria, monto, 'Ingreso' as tipo 
+        FROM ingresos WHERE usuario_id=%s
+        UNION ALL
+        SELECT fecha, tipo as categoria, monto, 'Gasto' as tipo 
+        FROM gastos WHERE usuario_id=%s
+    """
+    params = [user_id, user_id]
+    
+    if month and year:
+        date_filter = f"{year}-{month}-%"
+        query = """
+            SELECT fecha, categoria, monto, 'Ingreso' as tipo 
+            FROM ingresos WHERE usuario_id=%s AND fecha LIKE %s
+            UNION ALL
+            SELECT fecha, tipo as categoria, monto, 'Gasto' as tipo 
+            FROM gastos WHERE usuario_id=%s AND fecha LIKE %s
+        """
+        params = [user_id, date_filter, user_id, date_filter]
+        
+    query += " ORDER BY fecha DESC"
+    
+    cursor.execute(query, params)
+    data = cursor.fetchall()
+    conn.close()
+    
+    # Create PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    pdf.cell(200, 10, txt=f"Reporte Financiero - {name}", ln=True, align='C')
+    if month and year:
+        pdf.cell(200, 10, txt=f"Periodo: {month}/{year}", ln=True, align='C')
+    
+    pdf.ln(10)
+    
+    # Table
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(40, 10, "Fecha", 1)
+    pdf.cell(30, 10, "Tipo", 1)
+    pdf.cell(70, 10, "Categoria", 1)
+    pdf.cell(40, 10, "Monto", 1)
+    pdf.ln()
+    
+    pdf.set_font("Arial", size=10)
+    for row in data:
+        pdf.cell(40, 10, str(row['fecha']), 1)
+        pdf.cell(30, 10, str(row['tipo']), 1)
+        
+        # Sanitize text for FPDF (latin-1)
+        cat = str(row['categoria']).encode('latin-1', 'replace').decode('latin-1')
+        pdf.cell(70, 10, cat, 1)
+        
+        pdf.cell(40, 10, f"${row['monto']:,.2f}", 1)
+        pdf.ln()
+        
+    # Output
+    val = pdf.output(dest='S')
+    if isinstance(val, str):
+        val = val.encode('latin-1')
+    
+    return send_file(
+        io.BytesIO(val),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name='reporte.pdf'
+    )
 
 # =========================
 # START
 # =========================
 
-
 @app.route("/check-initial-profile", methods=["GET", "OPTIONS"])
+@cross_origin()
+@jwt_required(optional=True)
 def check_initial_profile():
     if request.method == "OPTIONS":
-        return jsonify({}), 200
+        return "", 200
 
-    verify_jwt_in_request()
     email = get_jwt_identity()
+    if not email:
+        return jsonify({"message": "Token requerido"}), 401
 
     conn = conectar_db()
     cursor = conn.cursor()
@@ -760,16 +924,22 @@ def check_initial_profile():
     conn.close()
 
     # Si tiene nombre, NO necesita perfil info.
-    has_profile = bool(row and row[0])
+    # Aseguramos que no sea None ni cadena vacía.
+    # Si row es None (usuario no encontrado) o row[0] es None/Vacío -> has_profile = False
+    has_profile = row and row[0] and str(row[0]).strip() != ""
     return jsonify({"needs_profile_info": not has_profile}), 200
 
 @app.route("/save-initial-profile", methods=["POST", "OPTIONS"])
+@cross_origin()
+@jwt_required(optional=True)
 def save_initial_profile():
     if request.method == "OPTIONS":
-        return jsonify({}), 200
+        return "", 200
 
-    verify_jwt_in_request()
     email = get_jwt_identity()
+    if not email:
+        return jsonify({"message": "Token requerido"}), 401
+
     data = request.json
     conn = conectar_db()
     cursor = conn.cursor()
@@ -780,12 +950,16 @@ def save_initial_profile():
     return jsonify({"message": "Perfil guardado"}), 200
 
 @app.route("/check-onboarding", methods=["GET", "OPTIONS"])
+@cross_origin()
+@jwt_required(optional=True)
 def check_onboarding():
     if request.method == "OPTIONS":
-        return jsonify({}), 200
+        return "", 200
 
-    verify_jwt_in_request()
     email = get_jwt_identity()
+    if not email:
+        return jsonify({"message": "Token requerido"}), 401
+
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT ingreso_mensual FROM usuarios WHERE email = %s", (email,))
@@ -797,13 +971,16 @@ def check_onboarding():
     return jsonify({"needs_onboarding": needs}), 200
 
 @app.route("/save-onboarding", methods=["POST", "OPTIONS"])
+@cross_origin()
+@jwt_required(optional=True)
 def save_onboarding():
     if request.method == "OPTIONS":
-        return jsonify({}), 200
-
-    verify_jwt_in_request()
+        return "", 200
 
     email = get_jwt_identity()
+    if not email:
+        return jsonify({"message": "Token requerido"}), 401
+
     data = request.json
     
     ingreso = data.get("ingreso_mensual")

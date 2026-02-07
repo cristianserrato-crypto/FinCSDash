@@ -23,10 +23,6 @@
 
     <!-- Configuración de Entorno (URL del Backend) -->
     <script src="js/config.js"></script>
-    <script src="js/app.js"></script>
-
-
-    
     <!-- Lógica -->
     <!-- Carga el archivo principal de JavaScript que controla toda la aplicación -->
     <!-- 'defer' significa que espera a que el HTML cargue antes de ejecutarse -->
@@ -135,6 +131,53 @@
     </div>
     <button onclick="resetPasswordWithToken()">Actualizar Contraseña</button>
     <p id="resetMsg"></p>
+</section>
+
+<!-- TÉRMINOS Y CONDICIONES -->
+<section id="terms-view" style="display:none;">
+    <h2>📜 Términos y Condiciones</h2>
+    <p style="text-align: center; margin-bottom: 15px;">Por favor, lee y acepta para continuar.</p>
+    
+    <div style="height: 350px; overflow-y: auto; border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; background: #fff; color: #333; text-align: left; border-radius: 8px; font-size: 0.9rem; line-height: 1.5;">
+        <p><strong>📜 Términos, Condiciones y Política de Privacidad – FinCSDash</strong></p>
+        <p>Al utilizar la plataforma FinCSDash, el usuario acepta los presentes Términos y Condiciones de Uso, así como la Política de Privacidad y Tratamiento de Datos Personales.</p>
+
+        <p><strong>1. Objeto del servicio</strong><br>
+        FinCSDash es una plataforma digital destinada a la gestión y visualización de información financiera personal. La plataforma tiene fines informativos y de apoyo en la organización de finanzas personales. FinCSDash no ofrece asesoría financiera, contable, legal o de inversión, ni garantiza resultados económicos derivados del uso de la aplicación.</p>
+
+        <p><strong>2. Responsabilidad del usuario</strong><br>
+        El usuario es responsable de la veracidad, actualización y legalidad de la información que registra en la plataforma. FinCSDash no se hace responsable por decisiones financieras, pérdidas económicas o consecuencias derivadas del uso de la información presentada en la aplicación.</p>
+
+        <p><strong>3. Seguridad de la cuenta</strong><br>
+        El usuario es responsable de la confidencialidad de sus credenciales de acceso. Cualquier actividad realizada desde su cuenta será considerada como realizada por el propio usuario. FinCSDash no se responsabiliza por accesos no autorizados derivados del uso indebido o negligente de las credenciales por parte del usuario.</p>
+
+        <p><strong>4. Tratamiento de datos personales</strong><br>
+        FinCSDash recopila y procesa datos personales tales como correo electrónico, información de perfil y datos financieros ingresados por el usuario, exclusivamente con el fin de prestar el servicio.<br>
+        La información se almacena de forma segura en infraestructura en la nube (Amazon Web Services – AWS). FinCSDash no vende, alquila ni comparte datos personales con terceros, salvo cuando sea requerido por obligación legal o autorización expresa del usuario.</p>
+
+        <p><strong>5. Protección de la información</strong><br>
+        Se aplican medidas técnicas y organizativas razonables para proteger la información del usuario frente a accesos no autorizados, pérdida o alteración. No obstante, el usuario reconoce que ningún sistema es completamente infalible.</p>
+
+        <p><strong>6. Disponibilidad del servicio</strong><br>
+        FinCSDash podrá presentar interrupciones temporales por mantenimiento, mejoras, fallos técnicos o causas externas. No se garantiza la disponibilidad ininterrumpida del servicio ni la ausencia de errores.</p>
+
+        <p><strong>7. Eliminación de cuenta y datos</strong><br>
+        El usuario podrá solicitar la eliminación de su cuenta. FinCSDash eliminará la información asociada, salvo aquella que deba conservarse por obligaciones legales o razones técnicas legítimas.</p>
+
+        <p><strong>8. Propiedad intelectual</strong><br>
+        El software, diseño, marcas y contenido de FinCSDash son propiedad de sus desarrolladores. Queda prohibida la reproducción, modificación o distribución no autorizada de la plataforma.</p>
+
+        <p><strong>9. Modificaciones de los términos</strong><br>
+        FinCSDash se reserva el derecho de modificar los presentes términos en cualquier momento. Los cambios serán informados dentro de la plataforma y el uso continuado del servicio implica la aceptación de los nuevos términos.</p>
+
+        <p><strong>10. Aceptación</strong><br>
+        El uso de FinCSDash implica la aceptación expresa de los presentes Términos, Condiciones y Política de Privacidad.</p>
+    </div>
+
+    <div class="flex-gap">
+        <button onclick="cancelTerms()" class="btn btn-secondary">Cancelar</button>
+        <button onclick="acceptTerms()" class="btn btn-primary">Aceptar</button>
+    </div>
 </section>
 
 <!-- ONBOARDING (CONFIGURACIÓN INICIAL) -->

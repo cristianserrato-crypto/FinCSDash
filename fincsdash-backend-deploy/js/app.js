@@ -61,26 +61,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Reemplaza el contenido HTML interno con todo el diseño del panel de control
         dashboard.innerHTML = `
             <div class="dashboard-container">
-                <!-- Logo y Aviso Demo (Nueva Cabecera Superior) -->
-                <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-                    <img src="./logo.png" alt="FinCSDash" style="height: 110px; width: auto;">
-                    <div style="
-                        background: #fff3cd;
-                        color: #856404;
-                        border: 1px solid #ffeeba;
-                        padding: 12px 16px;
-                        border-radius: 8px;
-                        font-size: 0.75rem;
-                        flex: 1;
-                    ">
-                        ⚠️ <strong>FinCSDash – Versión de prueba (Demo)</strong> — No ingreses datos reales o sensibles.
-                    </div>
-                </div>
-
                 <!-- Encabezado -->
                 <div class="header-bar">
-                    <div class="header-left">
+                    <div class="header-left" style="display: flex; align-items: center; gap: 15px;">
                          <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+                         <img src="./logo.png" alt="FinCSDash" style="height: 50px; width: auto;">
                     </div>
 
                     <div class="header-right">
@@ -418,10 +403,14 @@ function showDashboard(email) {
     fetch(`${API}/check-initial-profile`, {
         headers: { "Authorization": "Bearer " + token }
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) throw new Error("Error verificando perfil");
+        return res.json();
+    })
     .then(profileData => {
+        console.log("Perfil check:", profileData); // Depuración
         if (profileData.needs_profile_info) {
-            showInitialProfile();
+            showTerms();
         } else {
             // 2. VERIFY IF IT NEEDS ONBOARDING
             fetch(`${API}/check-onboarding`, {
@@ -449,6 +438,23 @@ function showDashboard(email) {
         showToast("Error al cargar tu perfil. Intenta iniciar sesión de nuevo.", "error");
         logout(); // Logout on error to avoid being stuck
     });
+}
+
+// Función para mostrar los Términos y Condiciones
+function showTerms() {
+    hideAll();
+    adjustMainLayout(false);
+    const view = document.getElementById("terms-view");
+    view.style.display = "block";
+    triggerFadeAnimation(view);
+}
+
+function acceptTerms() {
+    showInitialProfile();
+}
+
+function cancelTerms() {
+    logout();
 }
 
 /* ======================
@@ -1660,22 +1666,24 @@ function logout() {
    GOOGLE LOGIN
 ====================== */
 // Configuración inicial de Google al cargar la página
-window.onload = () => {
-    // Inicializa la librería de Google con tu ID de cliente
-    google.accounts.id.initialize({
-        client_id: window.GOOGLE_CLIENT_ID,
-        callback: handleGoogle
-    });
+window.addEventListener("load", () => {
+    // Verificamos que la librería de Google y el ID de cliente existan
+    if (window.google && window.GOOGLE_CLIENT_ID) {
+        google.accounts.id.initialize({
+            client_id: window.GOOGLE_CLIENT_ID,
+            callback: handleGoogle
+        });
 
-    // Dibuja el botón de Google en el div correspondiente
-    const googleBtn = document.getElementById("googleBtn");
-    if (googleBtn) {
-        google.accounts.id.renderButton(
-            googleBtn,
-            { theme: "outline", size: "large" }
-        );
+        // Dibuja el botón de Google en el div correspondiente
+        const googleBtn = document.getElementById("googleBtn");
+        if (googleBtn) {
+            google.accounts.id.renderButton(
+                googleBtn,
+                { theme: "outline", size: "large" }
+            );
+        }
     }
-};
+});
 
 // Función que maneja la respuesta de Google
 function handleGoogle(response) {
@@ -1686,11 +1694,15 @@ function handleGoogle(response) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.message.includes("exitoso")) {
+        // CORRECCIÓN: Verificamos si recibimos el token
+        if (data.token) {
             localStorage.setItem("token", data.token);
-            currentUser = data.email;
+            // Usamos el email que ahora nos devuelve el backend
+            currentUser = data.email; 
             localStorage.setItem("email", currentUser); // Guardar email para F5
             showDashboard(currentUser);
+        } else {
+            showToast(data.message || "Error al iniciar sesión con Google", 'error');
         }
     });
 }
