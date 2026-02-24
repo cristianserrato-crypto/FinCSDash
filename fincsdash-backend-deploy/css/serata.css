@@ -1,0 +1,507 @@
+/* Tipografía y base */
+.serata-body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #3b2c35;
+    background: radial-gradient(circle at top left, #ffe9f0 0, #fdf1e6 40%, #f8edf6 75%, #f9fafb 100%);
+}
+
+main {
+    max-width: 1120px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+    box-sizing: border-box;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+/* Header */
+.serata-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: linear-gradient(to right, rgba(255, 249, 252, 0.88), rgba(255, 245, 245, 0.9));
+    border-bottom: 1px solid rgba(209, 213, 219, 0.6);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 0, #fff9e6 0, #f9c27d 40%, #e29ab6 85%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4b2b3b;
+    font-weight: 700;
+    font-size: 1.2rem;
+    box-shadow: 0 10px 25px rgba(148, 64, 94, 0.25);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.brand-name {
+    font-family: 'Playfair Display', "Times New Roman", serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.brand-subtitle {
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #9f7e8f;
+}
+
+.serata-nav {
+    display: flex;
+    gap: 18px;
+    font-size: 0.9rem;
+}
+
+.serata-nav a {
+    text-decoration: none;
+    color: #5b3948;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 500;
+    font-size: 0.75rem;
+    position: relative;
+    padding-bottom: 3px;
+}
+
+.serata-nav a::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 1px;
+    background: linear-gradient(to right, #f97373, #fbbf24);
+    transition: width 0.2s ease-out;
+}
+
+.serata-nav a:hover::after {
+    width: 100%;
+}
+
+/* Hero */
+.hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 32px;
+    margin-top: 24px;
+    align-items: center;
+}
+
+.hero-kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.72rem;
+    color: #b26b7a;
+    margin-bottom: 8px;
+}
+
+.hero h1 {
+    font-family: 'Playfair Display', "Times New Roman", serif;
+    font-size: clamp(1.9rem, 2.6vw + 1.2rem, 2.8rem);
+    line-height: 1.1;
+    margin: 0 0 16px;
+    color: #3b2230;
+}
+
+.hero-copy {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #6b4b59;
+    margin-bottom: 18px;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.btn-primary,
+.btn-ghost {
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #f97373, #f59e0b);
+    color: #fff7f4;
+    box-shadow: 0 12px 25px rgba(244, 114, 182, 0.35);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.05);
+}
+
+.btn-ghost {
+    background: rgba(255, 255, 255, 0.75);
+    color: #8b5c6b;
+    border-color: rgba(209, 213, 219, 0.9);
+}
+
+.btn-ghost:hover {
+    background: #fff;
+}
+
+.hero-note {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #a27d8b;
+    margin-top: 4px;
+}
+
+.hero-media {
+    position: relative;
+}
+
+.hero-photo-frame {
+    border-radius: 28px;
+    padding: 10px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(248, 213, 222, 0.9));
+    box-shadow:
+        0 22px 50px rgba(148, 64, 94, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.hero-photo-frame img {
+    border-radius: 22px;
+    object-fit: cover;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+}
+
+.hero-badge {
+    position: absolute;
+    bottom: -10px;
+    left: 18%;
+    transform: translateY(50%);
+    background: rgba(30, 27, 75, 0.9);
+    color: #fefce8;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+}
+
+.hero-badge span {
+    font-weight: 600;
+}
+
+/* Catálogo */
+.catalog-section {
+    margin-top: 64px;
+}
+
+.section-header {
+    text-align: center;
+    max-width: 540px;
+    margin: 0 auto 28px;
+}
+
+.section-header h2 {
+    font-family: 'Playfair Display', "Times New Roman", serif;
+    font-size: 1.8rem;
+    margin: 0 0 8px;
+    color: #3b2230;
+}
+
+.section-header p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #7b5b68;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 22px;
+}
+
+.product-card {
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 24px;
+    padding: 14px 14px 16px;
+    box-shadow:
+        0 14px 35px rgba(148, 64, 94, 0.08),
+        0 0 0 1px rgba(248, 229, 234, 0.9);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.product-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle at top right, rgba(244, 114, 182, 0.16), transparent 60%);
+    pointer-events: none;
+}
+
+.product-image {
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+}
+
+.product-image img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    transform: scale(1.02);
+    transition: transform 0.3s ease-out;
+}
+
+.product-card:hover .product-image img {
+    transform: scale(1.07);
+}
+
+.product-info {
+    position: relative;
+    z-index: 1;
+}
+
+.product-info h3 {
+    margin: 4px 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #3b2230;
+}
+
+.product-description {
+    margin: 4px 0 10px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: #745262;
+}
+
+.product-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.price {
+    font-weight: 600;
+    color: #4b2b3b;
+    font-size: 1rem;
+}
+
+.badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(22, 163, 74, 0.09);
+    color: #166534;
+    white-space: nowrap;
+}
+
+.product-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(248, 182, 196, 0.9);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    text-decoration: none;
+    color: #9b4b5e;
+    background: rgba(255, 251, 251, 0.9);
+}
+
+.product-link:hover {
+    background: #fef2f2;
+}
+
+/* Sección colección */
+.collection-strip {
+    margin-top: 72px;
+    border-radius: 28px;
+    padding: 22px 22px 22px 24px;
+    background: linear-gradient(135deg, #fce7f3, #ffedd5);
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: center;
+    box-shadow: 0 18px 45px rgba(190, 24, 93, 0.25);
+}
+
+.collection-text h2 {
+    font-family: 'Playfair Display', "Times New Roman", serif;
+    margin: 0 0 8px;
+    font-size: 1.6rem;
+    color: #3b2230;
+}
+
+.collection-text p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #6b4b59;
+    max-width: 420px;
+}
+
+.collection-image img {
+    border-radius: 22px;
+    box-shadow: 0 16px 40px rgba(148, 64, 94, 0.28);
+}
+
+/* Contacto */
+.contact-section {
+    margin-top: 72px;
+    display: flex;
+    justify-content: center;
+}
+
+.contact-card {
+    max-width: 620px;
+    width: 100%;
+    padding: 22px 24px 24px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow:
+        0 20px 50px rgba(15, 23, 42, 0.12),
+        0 0 0 1px rgba(248, 229, 234, 0.95);
+}
+
+.contact-card h2 {
+    margin: 0 0 8px;
+    font-family: 'Playfair Display', "Times New Roman", serif;
+    font-size: 1.5rem;
+    color: #3b2230;
+}
+
+.contact-card p {
+    margin: 0 0 16px;
+    font-size: 0.9rem;
+    color: #6b4b59;
+}
+
+.contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+}
+
+.contact-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.contact-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #a27d8b;
+}
+
+.contact-item a,
+.contact-item span {
+    font-size: 0.9rem;
+    color: #4b2b3b;
+    text-decoration: none;
+}
+
+.contact-item a:hover {
+    text-decoration: underline;
+}
+
+/* Footer */
+.serata-footer {
+    margin-top: auto;
+    padding: 18px 16px 22px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #9f7e8f;
+}
+
+/* Responsivo */
+@media (max-width: 840px) {
+    .hero {
+        grid-template-columns: minmax(0, 1fr);
+        margin-top: 16px;
+    }
+
+    .hero-media {
+        order: -1;
+    }
+
+    main {
+        padding-top: 24px;
+    }
+}
+
+@media (max-width: 720px) {
+    .serata-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .serata-nav {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        row-gap: 6px;
+    }
+}
+
+@media (max-width: 540px) {
+    .collection-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+

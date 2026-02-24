@@ -1,5 +1,5 @@
-/* FUENTE MODERNA (INTER) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* FUENTE MODERNA (POPPINS) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 /* VARIABLES DE COLOR MODERNAS */
 :root {
@@ -17,12 +17,35 @@
 
 /* ESTILOS GENERALES */
 body {
-    background-color: var(--bg-body) !important;
-    color: var(--dark) !important;
-    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-body);
+    color: var(--dark);
+    font-family: 'Poppins', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center;
+    transition: background-color 0.3s ease;
+}
+
+/* NUEVO: Fondo animado para las páginas de autenticación */
+body.auth-background {
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradientBG 8s ease infinite;
+}
+
+@keyframes gradientBG {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
 }
 
 /* SCROLLBAR PERSONALIZADO */
@@ -32,7 +55,6 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
 body.dark-mode ::-webkit-scrollbar-thumb { background: #4a5568; }
 body.dark-mode ::-webkit-scrollbar-thumb:hover { background: #718096; }
-}
 
 /* Oculta el header original, ya que el dashboard inyecta el suyo */
 header {
@@ -43,10 +65,14 @@ header {
 /* ESTILOS PARA LOGIN/REGISTRO */
 main {
     max-width: 420px;
+    width: 90%;
     margin: 50px auto;
     padding: 30px;
-    background: var(--card-bg);
-    border-radius: 8px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 20px;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
 }
@@ -72,7 +98,7 @@ body.dark-mode {
     --border-color: #2a4165;
     --shadow: none;
 }
-body.dark-mode main { border-color: var(--border-color); }
+body.dark-mode main { border-color: var(--border-color); background: rgba(33, 54, 88, 0.9); }
 body.dark-mode .card { background: rgba(33, 54, 88, 0.85); border: 1px solid var(--border-color); box-shadow: var(--shadow); }
 body.dark-mode .form-control { background-color: #1a2e4d; border-color: var(--border-color); color: #fff; }
 body.dark-mode .form-control::placeholder { color: #6c757d; }
@@ -529,6 +555,37 @@ body.dark-mode .chat-input-area input { background: #1a2e4d; color: white; }
     flex: 1 1 auto; /* Se ajustan al ancho disponible */
     text-align: center;
     max-width: 100%;
+}
+
+/* --- WALLPAPER GRID --- */
+.wallpaper-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.wallpaper-option {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.wallpaper-option:hover {
+    transform: scale(1.05);
+    border-color: var(--primary);
+}
+
+.wallpaper-option.selected {
+    border-color: var(--success);
+    box-shadow: 0 0 15px rgba(45, 206, 137, 0.5);
+    transform: scale(0.95);
+    opacity: 1;
 }
 
 .chat-option-btn:hover {

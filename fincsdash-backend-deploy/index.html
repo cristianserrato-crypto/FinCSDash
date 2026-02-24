@@ -12,7 +12,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Estilos -->
     <!-- Conecta este archivo con la hoja de estilos CSS para que se vea bonito -->
     <link rel="stylesheet" href="css/styles.css">
@@ -54,7 +54,7 @@
     <a href="#" onclick="showForgotPassword()" style="text-align: center; display: block; margin-top: 10px; font-size: 0.9rem; color: var(--primary);">¿Olvidaste tu contraseña?</a>
 
     <!-- Contenedor vacío donde Google dibujará su botón de "Iniciar sesión" -->
-    <div id="googleBtn"></div>
+    <div id="googleBtn" style="display: flex; justify-content: center; margin-top: 15px;"></div>
 
     <!-- Párrafo vacío para mostrar mensajes de error o éxito -->
     <p id="loginMsg"></p>
@@ -257,6 +257,22 @@
 
 </main>
 
+<!-- MODAL EDITAR INGRESO BASE -->
+<div id="edit-base-income-modal" class="modal-overlay">
+    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
+        <h3 style="margin-bottom: 15px;">✏️ Actualizar Ingreso Base</h3>
+        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 20px;">Este valor se usará para calcular tu presupuesto en los meses futuros.</p>
+        
+        <label class="form-label">Nuevo Ingreso Mensual</label>
+        <input type="number" id="editBaseIncomeAmount" class="form-control form-group" placeholder="0.00">
+        
+        <div class="flex-gap">
+            <button onclick="closeModal('edit-base-income-modal')" class="btn btn-secondary">Cancelar</button>
+            <button onclick="saveBaseIncome()" class="btn btn-primary">Guardar</button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL EDITAR GASTO RECURRENTE -->
 <div id="edit-recurring-modal" class="modal-overlay">
     <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
@@ -303,6 +319,17 @@
             <button onclick="closeModal('add-savings-modal')" class="btn btn-secondary">Cancelar</button>
             <button onclick="saveSavingsGoal()" class="btn btn-primary">Crear</button>
         </div>
+    </div>
+</div>
+
+<!-- MODAL SELECCIONAR FONDO (WALLPAPER) -->
+<div id="wallpaper-modal" class="modal-overlay">
+    <div class="card" style="width: 500px; max-width: 95%; margin: 0;">
+        <h3 style="margin-bottom: 15px;">🎨 Elige un Fondo</h3>
+        <div id="wallpaper-grid" class="wallpaper-grid">
+            <!-- Las imágenes se cargarán aquí con JS -->
+        </div>
+        <button onclick="closeModal('wallpaper-modal')" class="btn btn-secondary w-100" style="margin-top: 20px;">Cerrar</button>
     </div>
 </div>
 

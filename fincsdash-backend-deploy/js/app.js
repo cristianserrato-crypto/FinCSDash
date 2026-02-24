@@ -12,6 +12,51 @@ let sortAsc = true;        // Para alternar entre ascendente y descendente
 let myChart = null;        // Variable global para el gráfico
 let recurringExpensesTemp = []; // Para guardar temporalmente los gastos del onboarding
 let currentChartType = 'Gasto'; // Tipo de gráfico actual (Gasto por defecto)
+let currentBaseIncome = 0;      // Para guardar el ingreso base y poder editarlo
+let rotationInterval = null;    // Variable para controlar la rotación automática
+let currentAutoWallpaperObj = null; // Para recordar cuál es el fondo automático actual (para resize)
+
+// LISTA DE FONDOS DISPONIBLES
+// Modificamos la estructura para tener ID y dos URLs (Desktop y Mobile)
+// RECOMENDACIÓN: Usa fotos horizontales para 'url' y verticales para 'mobileUrl'
+const wallpapers = [
+    { 
+        id: 'default', 
+        name: 'Por defecto', 
+        url: '', 
+        mobileUrl: '' 
+    },
+    { 
+        id: 'wallpaper_1', 
+        name: 'Fondo 1', 
+        url: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersdesktop/1.png', 
+        mobileUrl: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersmobile/1.jpg' 
+    },
+    { 
+        id: 'wallpaper_2', 
+        name: 'Fondo 2', 
+        url: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersdesktop/2.jpg', 
+        mobileUrl: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersmobile/2.jpg' 
+    },
+    { 
+        id: 'wallpaper_3', 
+        name: 'Fondo 3', 
+        url: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersdesktop/3.png', 
+        mobileUrl: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersmobile/3.jpg' 
+    },
+    { 
+        id: 'wallpaper_4', 
+        name: 'Fondo 4', 
+        url: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersdesktop/4.jpg', 
+        mobileUrl: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersmobile/4.jpg' 
+    },
+    { 
+        id: 'wallpaper_5', 
+        name: 'Fondo 5', 
+        url: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersdesktop/5.png', 
+        mobileUrl: 'https://s3.us-east-1.amazonaws.com/fincsdash.online/imgwallpapersmobile/5.jpg' 
+    }
+];
 
 /* ======================
    ESTILOS (INYECCIÓN)
@@ -87,6 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
                                 <div class="dropdown-body">
                                     <button onclick="openEditProfileModal()" class="dropdown-item">👤 Editar Perfil</button>
+                                    <button onclick="openWallpaperModal()" class="dropdown-item">🎨 Cambiar Fondo</button>
                                     <label for="profilePhotoInput" class="dropdown-item">📷 Cambiar Foto</label>
                                     <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
                                     <button id="btnRemovePhoto" class="dropdown-item" onclick="removeProfilePhoto()" style="display:none; color: var(--danger);">🗑️ Eliminar Foto</button>
@@ -241,14 +287,17 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
 
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
-                                    <div>
+                                     <div>
                                         <small class="text-muted">Ingreso Base</small>
-                                        <div id="baseIncomeDisplay" style="font-weight: bold; color: var(--success);">--</div>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div id="baseIncomeDisplay" style="font-weight: bold; color: var(--success);">--</div>
+                                            <button onclick="openEditBaseIncomeModal()" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6; padding:0;" title="Editar Ingreso Base">✏️</button>
+                                        </div>
                                         <!-- Contenedor para el botón de confirmar ingreso o estado -->
                                         <div id="incomeStatusContainer" style="margin-top: 5px;">
                                             <!-- Contenido dinámico: botón o texto -->
                                         </div>
-                                    </div>
+                                     </div>
                                 </div>
                                 <div id="paymentsListContainer"></div>
                             </div>
@@ -292,6 +341,14 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.classList.add('dark-mode');
     }
 
+    // Cargar Fondo de Pantalla guardado
+    loadSavedWallpaper();
+
+    // Detectar cambios de tamaño de pantalla (ej: rotar celular) para ajustar fondo
+    window.addEventListener('resize', () => {
+        loadSavedWallpaper();
+    });
+
     // VERIFICAR SESIÓN AL CARGAR (CORRECCIÓN F5)
     // Busca si hay un token guardado en el navegador (localStorage)
     const storedToken = localStorage.getItem("token");
@@ -320,22 +377,30 @@ function adjustMainLayout(isDashboard) {
     if (!main) return;
 
     if (isDashboard) {
+        // Al entrar al dashboard, se quita el fondo animado y se usan los colores base.
+        document.body.classList.remove('auth-background');
         // En el Dashboard: Quitamos las restricciones de ancho y estilo de tarjeta
         // para que ocupe toda la pantalla y se vea bien en PC.
         main.style.maxWidth = "100%";
+        main.style.width = "100%";
         main.style.margin = "0";
         main.style.padding = "0";
         main.style.background = "transparent";
         main.style.borderRadius = "0";
-        if (header) header.style.display = "none"; // Oculta la franja superior en el Dashboard
+        if (header) header.style.display = "none"; // Oculta el header original en el Dashboard
+        loadSavedWallpaper(); // Asegurar que el fondo se vea en el dashboard
     } else {
+        // En las vistas de autenticación, se aplica el fondo animado.
+        document.body.classList.add('auth-background');
         // En Login/Registro: Restauramos los estilos del CSS (tarjeta centrada de 400px)
         main.style.maxWidth = "";
+        main.style.width = "";
         main.style.margin = "";
         main.style.padding = "";
         main.style.background = "";
         main.style.borderRadius = "";
-        if (header) header.style.display = ""; // Muestra la franja superior en Login/Registro
+        if (header) header.style.display = "none"; // Ocultamos también el header original en Login/Registro
+        document.body.style.backgroundImage = ""; // Limpiar fondo personalizado en login
     }
 }
 
@@ -524,7 +589,7 @@ function processChatMessage(message) {
         
         // Si la respuesta indica éxito, recargar movimientos
         if (data.response.includes("registrado") || data.response.includes("eliminado")) {
-            loadMovements();
+            filterMovements();
             loadPaymentStatus();
             if (data.response.includes("Ahorro")) loadSavingsGoals(); // Recargar metas si se actualizó ahorro
         }
@@ -739,7 +804,7 @@ function submitQuickExpense(btnElement) {
     .then(data => {
         container.remove(); // Eliminar formulario
         appendMessage(`✅ Gasto registrado: $${amount} en ${category}`, 'bot');
-        loadMovements(); // Actualizar dashboard
+        filterMovements(); // Actualizar dashboard
         loadPaymentStatus();
         
         // Restaurar menú
@@ -1242,9 +1307,8 @@ function deleteMovement(id, tipo) {
     })
     .then(res => res.json())
     .then(data => {
-        alert(data.message);
         showToast(data.message, 'success');
-        loadMovements(); // Recargar la tabla para ver los cambios
+        filterMovements(); // Recargar la tabla y balance, respetando el filtro de mes
     });
 }
 
@@ -1394,7 +1458,7 @@ function addExpense() {
         showToast(data.message, 'success');
         if (data.message.includes("agregado")) {
             document.getElementById("expenseAmount").value = "";
-            loadMovements(); 
+            filterMovements(); 
         }
     })
     .catch(err => console.error(err));
@@ -1428,11 +1492,10 @@ function addIncome() {
     })
     .then(res => res.json())
     .then(data => {
-        alert(data.message);
         showToast(data.message, 'success');
         if (data.message.includes("agregado")) {
             document.getElementById("expenseAmount").value = "";
-            loadMovements(); // Actualizar tabla y gráfico
+            filterMovements(); // Actualizar tabla y gráfico
         }
     })
     .catch(err => console.error(err));
@@ -2216,6 +2279,7 @@ function loadPaymentStatus() {
         }
         // ------------------------------------
 
+        currentBaseIncome = data.ingreso_base; // Guardar para el modal de edición
         document.getElementById("baseIncomeDisplay").innerText = formatCurrency(data.ingreso_base);
         
         // Determinar si estamos viendo el mes actual para mostrar/ocultar botón de ingreso
@@ -2353,7 +2417,7 @@ function quickPay(categoria, monto) {
     .then(data => {
         showToast("Pago registrado exitosamente", 'success');
         loadPaymentStatus(); // Recargar la lista para que aparezca como "PAGADO"
-        loadMovements();     // Actualizar historial en segundo plano
+        filterMovements();     // Actualizar historial y balance en segundo plano
     })
     .catch(err => showToast("Error al registrar pago", 'error'));
 }
@@ -2378,7 +2442,7 @@ function confirmMainIncome() {
         showToast(data.message, 'success');
         // Recargar todo para que se reflejen los cambios
         loadPaymentStatus();
-        loadMovements();
+        filterMovements();
     })
     .catch(err => {
         showToast(err.message, 'error');
@@ -2661,6 +2725,184 @@ function removeProfilePhoto() {
 }
 
 /* ======================
+   FONDOS DE PANTALLA (WALLPAPERS)
+====================== */
+function openWallpaperModal() {
+    const grid = document.getElementById("wallpaper-grid");
+    grid.innerHTML = ""; // Limpiar
+
+    // Obtener el ID actual (si es null, asumimos 'default')
+    const currentId = localStorage.getItem("dashboardWallpaperId") || 'default';
+
+    // OPCIÓN: Rotación Automática
+    const autoDiv = document.createElement("div");
+    autoDiv.className = "wallpaper-option";
+    autoDiv.style.display = "flex";
+    autoDiv.style.alignItems = "center";
+    autoDiv.style.justifyContent = "center";
+    autoDiv.style.backgroundColor = "var(--primary)";
+    autoDiv.style.color = "white";
+    autoDiv.innerText = "🔄 Auto";
+    autoDiv.onclick = () => setWallpaper('auto');
+    
+    // Marcar si está seleccionado
+    if (currentId === 'auto') {
+        autoDiv.classList.add('selected');
+    }
+    grid.appendChild(autoDiv);
+
+    // Detectar si es móvil para mostrar la miniatura correcta
+    const isMobile = window.innerWidth <= 768;
+
+    wallpapers.forEach(wp => {
+        const img = document.createElement("img");
+        // Usar mobileUrl si es móvil y existe, si no usar url normal
+        const thumbUrl = (isMobile && wp.mobileUrl) ? wp.mobileUrl : wp.url;
+
+        // Si es la opción "Por defecto" (url vacía), usamos una imagen placeholder o un color sólido
+        img.src = thumbUrl ? thumbUrl : 'https://via.placeholder.com/150/e9ecef/333333?text=Original';
+        img.className = "wallpaper-option";
+        img.title = wp.name;
+        // Ahora pasamos el ID en lugar de la URL directa
+        img.onclick = () => setWallpaper(wp.id);
+
+        // Marcar si está seleccionado
+        if (wp.id === currentId) {
+            img.classList.add('selected');
+        }
+        grid.appendChild(img);
+    });
+
+    document.getElementById("wallpaper-modal").classList.add("active");
+}
+
+function setWallpaper(id) {
+    // Lógica para Rotación Automática
+    if (id === 'auto') {
+        localStorage.setItem("dashboardWallpaperId", 'auto');
+        startAutoRotation();
+        showToast("Rotación automática activada (1 min)", "success");
+        closeModal("wallpaper-modal");
+        return;
+    }
+    stopAutoRotation(); // Detener rotación si se elige uno fijo
+
+    const wp = wallpapers.find(w => w.id === id);
+    
+    if (wp && wp.id !== 'default') {
+        // Detectar si es móvil (ancho menor a 768px)
+        const isMobile = window.innerWidth <= 768;
+        const urlToUse = (isMobile && wp.mobileUrl) ? wp.mobileUrl : wp.url;
+
+        document.body.style.backgroundImage = `url('${urlToUse}')`;
+        localStorage.setItem("dashboardWallpaperId", id); // Guardamos el ID, no la URL
+        showToast("Fondo actualizado", "success");
+    } else {
+        // Restaurar fondo original
+        document.body.style.backgroundImage = "";
+        localStorage.removeItem("dashboardWallpaperId");
+        showToast("Fondo restaurado", "info");
+    }
+    closeModal("wallpaper-modal");
+}
+
+function loadSavedWallpaper() {
+    // Solo aplicar si estamos en el dashboard (no en login)
+    const dashboard = document.getElementById("dashboard-view");
+    // Verificamos si el dashboard está visible o si hay un usuario logueado
+    const token = localStorage.getItem("token");
+    
+    if (token) {
+        const savedId = localStorage.getItem("dashboardWallpaperId");
+        
+        if (savedId === 'auto') {
+            if (!rotationInterval) startAutoRotation();
+            else applyAutoWallpaper(); // Re-aplicar el actual si se redimensiona
+            return;
+        }
+
+        if (savedId) {
+            const wp = wallpapers.find(w => w.id === savedId);
+            if (wp) {
+                const isMobile = window.innerWidth <= 768;
+                const urlToUse = (isMobile && wp.mobileUrl) ? wp.mobileUrl : wp.url;
+                
+                document.body.style.backgroundImage = `url('${urlToUse}')`;
+                document.body.classList.remove('auth-background');
+            }
+        }
+    }
+}
+
+// --- FUNCIONES PARA ROTACIÓN AUTOMÁTICA ---
+function startAutoRotation() {
+    if (rotationInterval) clearInterval(rotationInterval);
+    changeRandomWallpaper(); // Cambiar inmediatamente
+    // Cambiar cada 60 segundos (60000 ms)
+    rotationInterval = setInterval(changeRandomWallpaper, 60000);
+}
+
+function stopAutoRotation() {
+    if (rotationInterval) clearInterval(rotationInterval);
+    rotationInterval = null;
+}
+
+function changeRandomWallpaper() {
+    const valid = wallpapers.filter(w => w.id !== 'default');
+    if (valid.length === 0) return;
+    currentAutoWallpaperObj = valid[Math.floor(Math.random() * valid.length)];
+    applyAutoWallpaper();
+}
+
+function applyAutoWallpaper() {
+    if (!currentAutoWallpaperObj) return;
+    const isMobile = window.innerWidth <= 768;
+    const urlToUse = (isMobile && currentAutoWallpaperObj.mobileUrl) ? currentAutoWallpaperObj.mobileUrl : currentAutoWallpaperObj.url;
+    document.body.style.backgroundImage = `url('${urlToUse}')`;
+    document.body.classList.remove('auth-background');
+}
+
+/* ======================
+   MODALES (LÓGICA)
+====================== */
+function openEditBaseIncomeModal() {
+    document.getElementById("editBaseIncomeAmount").value = currentBaseIncome;
+    document.getElementById("edit-base-income-modal").classList.add("active");
+}
+
+function saveBaseIncome() {
+    const newIncome = document.getElementById("editBaseIncomeAmount").value;
+    if (!newIncome || parseFloat(newIncome) < 0) {
+        return showToast("Por favor, ingresa un monto válido.", "error");
+    }
+
+    const token = localStorage.getItem("token");
+
+    fetch(`${API}/update-base-income`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ ingreso_mensual: parseFloat(newIncome) })
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => { throw new Error(err.message || "Error al actualizar."); });
+        }
+        return res.json();
+    })
+    .then(data => {
+        showToast(data.message, "success");
+        closeModal("edit-base-income-modal");
+        loadPaymentStatus(); // Recargar para ver el nuevo valor
+    })
+    .catch(err => {
+        showToast(err.message, "error");
+    });
+}
+
+/* ======================
    METAS DE AHORRO
 ====================== */
 function loadSavingsGoals() {
@@ -2797,17 +3039,23 @@ function saveSavingsUpdate() {
         closeModal("update-savings-modal");
         loadSavingsGoals();
         if (deduct) {
-            loadMovements(); // Recargar movimientos si se creó un gasto
+            filterMovements(); // Recargar movimientos si se creó un gasto
             loadPaymentStatus();
         }
     });
 }
 
 function deleteSavingsGoal(id) {
-    if (!confirm("¿Eliminar esta meta de ahorro?")) return;
+    if (!confirm("¿Eliminar esta meta? Si tiene fondos, se devolverán a tu saldo.")) return;
     const token = localStorage.getItem("token");
     fetch(`${API}/delete-savings-goal/${id}`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } })
-    .then(() => loadSavingsGoals());
+    .then(res => res.json())
+    .then(data => {
+        showToast(data.message, 'success');
+        loadSavingsGoals();
+        filterMovements(); // Actualizar historial para ver la devolución
+        loadPaymentStatus(); // Actualizar balance en el header
+    });
 }
 
 /* ======================

@@ -546,10 +546,21 @@ def delete_income(id):
 @app.route("/delete-expense/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_expense(id):
+    email = get_jwt_identity()
     conn = conectar_db()
-    conn.cursor().execute("DELETE FROM gastos WHERE id=%s", (id,))
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
+    cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s", (id, user_id))
     conn.commit()
+    deleted = cursor.rowcount
     conn.close()
+    if deleted == 0:
+        return jsonify({"message": "Gasto no encontrado o no autorizado"}), 404
     return jsonify({"message": "Gasto eliminado"}), 200
 
 # =========================
@@ -632,20 +643,42 @@ def add_recurring():
 @app.route("/edit-recurring-expense/<int:id>", methods=["PUT"])
 @jwt_required()
 def edit_recurring(id):
+    email = get_jwt_identity()
     data = request.json
     conn = conectar_db()
-    conn.cursor().execute("UPDATE gastos_recurrentes SET monto=%s, dia_limite=%s WHERE id=%s", (data['monto'], data['dia'], id))
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
+    cursor.execute("UPDATE gastos_recurrentes SET monto=%s, dia_limite=%s WHERE id=%s AND usuario_id=%s", (data['monto'], data['dia'], id, user_id))
     conn.commit()
+    updated = cursor.rowcount
     conn.close()
+    if updated == 0:
+        return jsonify({"message": "Gasto recurrente no encontrado o no autorizado"}), 404
     return jsonify({"message": "Actualizado"}), 200
 
 @app.route("/delete-recurring-expense/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_recurring(id):
+    email = get_jwt_identity()
     conn = conectar_db()
-    conn.cursor().execute("DELETE FROM gastos_recurrentes WHERE id=%s", (id,))
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
+    cursor.execute("DELETE FROM gastos_recurrentes WHERE id=%s AND usuario_id=%s", (id, user_id))
     conn.commit()
+    deleted = cursor.rowcount
     conn.close()
+    if deleted == 0:
+        return jsonify({"message": "Gasto recurrente no encontrado o no autorizado"}), 404
     return jsonify({"message": "Eliminado"}), 200
 
 @app.route("/confirm-main-income", methods=["POST"])
@@ -665,6 +698,24 @@ def confirm_income():
     conn.commit()
     conn.close()
     return jsonify({"message": "Ingreso registrado"}), 200
+
+@app.route("/update-base-income", methods=["PUT"])
+@jwt_required()
+def update_base_income():
+    email = get_jwt_identity()
+    data = request.json
+    new_income = data.get("ingreso_mensual")
+
+    if new_income is None or not isinstance(new_income, (int, float)) or new_income < 0:
+        return jsonify({"message": "Monto de ingreso inválido"}), 400
+
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE usuarios SET ingreso_mensual = %s WHERE email = %s", (new_income, email))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "Ingreso base actualizado correctamente"}), 200
 
 # =========================
 # METAS DE AHORRO
@@ -706,18 +757,28 @@ def update_saving(id):
     data = request.json
     conn = conectar_db()
     cursor = conn.cursor()
-    
-    # Actualizar monto
-    cursor.execute("UPDATE metas_ahorro SET monto_actual=%s WHERE id=%s", (data['monto_actual'], id))
-    
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    user_row = cursor.fetchone()
+    if not user_row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = user_row[0]
+
+    # Actualizar monto solo si la meta pertenece al usuario
+    cursor.execute("UPDATE metas_ahorro SET monto_actual=%s WHERE id=%s AND usuario_id=%s RETURNING nombre", (data['monto_actual'], id, user_id))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Meta no encontrada o no autorizada"}), 404
+    nombre_meta = row[0]
+
     # Si se pide crear gasto (descontar del saldo)
     if data.get('crear_gasto') and data.get('monto_agregado'):
-        cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-        user_id = cursor.fetchone()[0]
         today = datetime.now().strftime("%Y-%m-%d")
-        cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, 'Ahorro', %s, %s, 0)",
-                       (user_id, data['monto_agregado'], today))
-        
+        categoria_gasto = f"Ahorro: {nombre_meta}"
+        cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, %s, %s, %s, 0)",
+                       (user_id, categoria_gasto, data['monto_agregado'], today))
+
     conn.commit()
     conn.close()
     return jsonify({"message": "Ahorro actualizado"}), 200
@@ -725,11 +786,37 @@ def update_saving(id):
 @app.route("/delete-savings-goal/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_saving(id):
+    email = get_jwt_identity()
     conn = conectar_db()
-    conn.cursor().execute("DELETE FROM metas_ahorro WHERE id=%s", (id,))
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    user_row = cursor.fetchone()
+    if not user_row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = user_row[0]
+
+    # 1. Obtener información de la meta solo si pertenece al usuario
+    cursor.execute("SELECT nombre, monto_actual FROM metas_ahorro WHERE id=%s AND usuario_id=%s", (id, user_id))
+    row = cursor.fetchone()
+
+    msg = "Meta eliminada"
+    if row:
+        nombre, monto = row
+        if monto and monto > 0:
+            today = datetime.now().strftime("%Y-%m-%d")
+            cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (%s, %s, %s, %s)",
+                           (user_id, monto, today, f"Devolución: {nombre}"))
+            msg = "Meta eliminada y dinero devuelto al saldo"
+
+    # 2. Eliminar la meta (solo si es del usuario)
+    cursor.execute("DELETE FROM metas_ahorro WHERE id=%s AND usuario_id=%s", (id, user_id))
     conn.commit()
+    deleted = cursor.rowcount
     conn.close()
-    return jsonify({"message": "Meta eliminada"}), 200
+    if deleted == 0:
+        return jsonify({"message": "Meta no encontrada o no autorizada"}), 404
+    return jsonify({"message": msg}), 200
 
 # =========================
 # CHAT
