@@ -377,6 +377,8 @@ function adjustMainLayout(isDashboard) {
     if (!main) return;
 
     if (isDashboard) {
+        document.body.classList.add("dashboard-active");
+        document.body.classList.remove("auth-flow");
         // Al entrar al dashboard, se quita el fondo animado y se usan los colores base.
         document.body.classList.remove('auth-background');
         // En el Dashboard: Quitamos las restricciones de ancho y estilo de tarjeta
@@ -390,7 +392,9 @@ function adjustMainLayout(isDashboard) {
         if (header) header.style.display = "none"; // Oculta el header original en el Dashboard
         loadSavedWallpaper(); // Asegurar que el fondo se vea en el dashboard
     } else {
-        // En las vistas de autenticación, se aplica el fondo animado.
+        document.body.classList.remove("dashboard-active");
+        document.body.classList.add("auth-flow");
+        // En las vistas de autenticación, se aplica el fondo corporativo.
         document.body.classList.add('auth-background');
         // En Login/Registro: Restauramos los estilos del CSS (tarjeta centrada de 400px)
         main.style.maxWidth = "";
@@ -924,7 +928,15 @@ function login() {
             password: document.getElementById("loginPassword").value
         })
     })
-    .then(res => res.json())
+    .then(async res => {
+        const ct = res.headers.get("content-type") || "";
+        const body = ct.includes("application/json") ? await res.json() : null;
+        if (!res.ok) {
+            const msg = (body && body.message) || `Error del servidor (${res.status})`;
+            throw new Error(msg);
+        }
+        return body;
+    })
     .then(data => {
         console.log("LOGIN RESPONSE:", data);
 

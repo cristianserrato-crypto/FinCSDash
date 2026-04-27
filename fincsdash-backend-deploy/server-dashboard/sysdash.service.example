@@ -1,0 +1,15 @@
+[Unit]
+Description=SysDash — monitor del servidor (métricas solo lectura)
+After=network.target
+
+[Service]
+User=cristians
+Group=www-data
+WorkingDirectory=/var/www/server-dashboard/backend
+Environment="PATH=/var/www/server-dashboard/venv/bin"
+Environment="DASHBOARD_TOKEN=CAMBIA_ESTO_POR_TOKEN_SECRETO_LARGO"
+ExecStart=/var/www/server-dashboard/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8001 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

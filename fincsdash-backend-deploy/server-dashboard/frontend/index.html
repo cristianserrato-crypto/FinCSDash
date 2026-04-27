@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050508" />
+  <title>SysDash · Monitor del servidor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    try {
+      if (sessionStorage.getItem("sysdash_token")) document.documentElement.classList.add("has-token");
+    } catch (e) {}
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="bg-noise" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb-1" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb-2" aria-hidden="true"></div>
+
+  <div id="gate" class="gate">
+    <div class="gate-card">
+      <h1>SysDash</h1>
+      <p class="gate-hint">Introduce el token configurado en el servidor (<code>DASHBOARD_TOKEN</code>).</p>
+      <input type="password" id="tokenInput" class="gate-input" placeholder="Token de acceso" autocomplete="off" />
+      <button type="button" id="tokenSave" class="btn btn-primary">Conectar</button>
+      <p id="gateError" class="gate-error" hidden></p>
+    </div>
+  </div>
+
+  <header class="header">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>SysDash</h1>
+        <p class="subtitle">Monitor en tiempo casi real</p>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span id="hostPill" class="pill">—</span>
+      <span id="lastUpdate" class="pill pill-dim">Sin datos</span>
+      <button type="button" id="btnLogout" class="btn btn-ghost">Cambiar token</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card card-wide">
+      <div class="card-head">
+        <h2>Uso de CPU</h2>
+        <span id="cpuValue" class="metric-big">—</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartCpu" height="120"></canvas>
+      </div>
+      <div id="cpuCores" class="core-bars"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Memoria RAM</h2>
+        <span id="ramValue" class="metric-big">—</span>
+      </div>
+      <div class="donut-wrap">
+        <canvas id="chartRam" width="160" height="160"></canvas>
+      </div>
+      <ul class="stat-list" id="ramStats"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Swap</h2>
+        <span id="swapValue" class="metric-big">—</span>
+      </div>
+      <div class="donut-wrap">
+        <canvas id="chartSwap" width="160" height="160"></canvas>
+      </div>
+      <ul class="stat-list" id="swapStats"></ul>
+    </section>
+
+    <section class="card card-wide">
+      <div class="card-head">
+        <h2>Carga del sistema</h2>
+        <span class="pill pill-dim" id="loadAvg">—</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartLoad" height="100"></canvas>
+      </div>
+    </section>
+
+    <section class="card card-full" id="fincsdashSection">
+      <div class="card-head">
+        <h2>FinCSDash · Registros</h2>
+        <div class="fincsdash-pills">
+          <span class="pill" id="fcTotal" title="Usuarios en tabla usuarios">— usuarios</span>
+          <span class="pill pill-dim" id="fcVerified" title="Cuenta verificada">— verificados</span>
+        </div>
+      </div>
+      <p id="fcHint" class="section-note fc-hint"></p>
+      <p id="fcError" class="svc-error" hidden></p>
+      <div class="table-wrap table-scroll fc-table-wrap">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Correo</th>
+              <th>Verificado</th>
+            </tr>
+          </thead>
+          <tbody id="fcUsersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card card-wide">
+      <div class="card-head">
+        <h2>Disco</h2>
+      </div>
+      <div id="diskList" class="disk-list"></div>
+    </section>
+
+    <section class="card card-wide">
+      <div class="card-head">
+        <h2>Procesos (top memoria)</h2>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>PID</th>
+              <th>Proceso</th>
+              <th>RAM %</th>
+              <th>CPU %</th>
+            </tr>
+          </thead>
+          <tbody id="procBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card card-full">
+      <div class="card-head">
+        <h2>Servicios systemd activos</h2>
+        <span id="svcCount" class="pill">0</span>
+      </div>
+      <p id="svcError" class="svc-error" hidden></p>
+      <div class="table-wrap table-scroll">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>Unidad</th>
+              <th>Estado</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody id="svcBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>SysDash · solo lectura · actualización cada <span id="intervalLabel">5</span>s</p>
+  </footer>
+</body>
+</html>

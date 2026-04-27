@@ -12,7 +12,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400..600&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Estilos -->
     <!-- Conecta este archivo con la hoja de estilos CSS para que se vea bonito -->
     <link rel="stylesheet" href="css/styles.css">
@@ -41,7 +41,15 @@
 <!-- LOGIN -->
 <!-- Sección de inicio de sesión. Tiene un ID para poder ocultarla o mostrarla con JS -->
 <section id="login-view">
-    <h2>Login</h2>
+    <div class="auth-brand">
+        <div class="auth-brand-mark">FC</div>
+        <div class="auth-brand-text">
+            <span class="auth-brand-title">FinCSDash</span>
+            <span class="auth-brand-sub">Control financiero claro y seguro</span>
+        </div>
+    </div>
+    <div class="auth-card-accent" aria-hidden="true"></div>
+    <h2>Iniciar sesión</h2>
 
     <!-- Campo de texto para escribir el email -->
     <input type="email" id="loginEmail" placeholder="Email">
@@ -66,6 +74,14 @@
 <!-- REGISTRO -->
 <!-- Sección de registro. 'style="display:none;"' significa que inicia oculta -->
 <section id="register-view" style="display:none;">
+    <div class="auth-brand auth-brand-compact">
+        <div class="auth-brand-mark">FC</div>
+        <div class="auth-brand-text">
+            <span class="auth-brand-title">FinCSDash</span>
+            <span class="auth-brand-sub">Crear cuenta</span>
+        </div>
+    </div>
+    <div class="auth-card-accent" aria-hidden="true"></div>
     <h2>Registro</h2>
 
     <input type="email" id="registerEmail" placeholder="Email">
@@ -89,6 +105,14 @@
 <!-- VERIFICACIÓN -->
 <!-- Sección para ingresar el código que llega al correo -->
 <section id="verify-view" style="display:none;">
+    <div class="auth-brand auth-brand-compact">
+        <div class="auth-brand-mark">FC</div>
+        <div class="auth-brand-text">
+            <span class="auth-brand-title">FinCSDash</span>
+            <span class="auth-brand-sub">Verificación</span>
+        </div>
+    </div>
+    <div class="auth-card-accent" aria-hidden="true"></div>
     <h2>Verificar cuenta</h2>
 
     <input type="email" id="verifyEmail" placeholder="Email" readonly>
@@ -106,7 +130,15 @@
 
 <!-- NUEVO: OLVIDO DE CONTRASEÑA -->
 <section id="forgot-password-view" style="display:none;">
-    <h2>Restablecer Contraseña</h2>
+    <div class="auth-brand auth-brand-compact">
+        <div class="auth-brand-mark">FC</div>
+        <div class="auth-brand-text">
+            <span class="auth-brand-title">FinCSDash</span>
+            <span class="auth-brand-sub">Recuperar acceso</span>
+        </div>
+    </div>
+    <div class="auth-card-accent" aria-hidden="true"></div>
+    <h2>Restablecer contraseña</h2>
     <p style="text-align: center; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem;" class="text-muted">
         Ingresa tu correo y te enviaremos un token para crear una nueva contraseña.
     </p>
@@ -118,7 +150,15 @@
 
 <!-- NUEVO: RESETEAR CONTRASEÑA CON TOKEN -->
 <section id="reset-password-view" style="display:none;">
-    <h2>Crear Nueva Contraseña</h2>
+    <div class="auth-brand auth-brand-compact">
+        <div class="auth-brand-mark">FC</div>
+        <div class="auth-brand-text">
+            <span class="auth-brand-title">FinCSDash</span>
+            <span class="auth-brand-sub">Nueva contraseña</span>
+        </div>
+    </div>
+    <div class="auth-card-accent" aria-hidden="true"></div>
+    <h2>Nueva contraseña</h2>
     <p style="text-align: center; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem;" class="text-muted">
         Ingresa el token que recibiste en tu correo y tu nueva contraseña.
     </p>

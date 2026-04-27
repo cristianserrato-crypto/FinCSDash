@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmigoIA - Tu Amigo Personal con IA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- PANTALLA DE INICIO (NUEVA) -->
+        <div id="welcome-screen" class="screen active">
+            <div class="welcome-card">
+                <div class="logo-glow">
+                    <div class="logo-icon">🤖</div>
+                </div>
+                <h1>Jarbis<span class="accent">IA</span></h1>
+                <p class="subtitle">Proyecto educativo de aprendizaje continuo</p>
+
+                <button class="btn-primary" id="btn-start-jarbis">
+                    <span>✨</span> Comenzar Conversación
+                </button>
+            </div>
+        </div>
+
+        <!-- PANTALLA DE LLAMADA (VOZ) -->
+        <div id="call-screen" class="screen">
+            <div class="call-container">
+                <div class="call-avatar-area">
+                    <div class="call-avatar" id="call-avatar">
+                        <div class="pulse-ring" id="pulse-ring"></div>
+                        <div class="avatar-face">🤖</div>
+                    </div>
+                    <h2 class="call-name" id="call-friend-name">Jarbis</h2>
+                    <p class="call-status" id="call-status">Listo para aprender</p>
+                </div>
+
+                <!-- EL TEXTO SE ELIMINA PARA MEJORAR LA VELOCIDAD -->
+                <div id="transcript-area" style="display:none;">
+                    <div id="transcript-text"></div>
+                </div>
+
+                <div class="call-controls">
+                    <button class="call-btn mic-btn" id="btn-mic">
+                        <svg id="mic-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                        <svg id="mic-off-icon" style="display:none" width="32" height="32" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.49-.34 2.18"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </button>
+                    <button class="call-btn end-btn" id="btn-end-call">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <p class="educational-disclaimer">
+                    Jarbis - Proyecto educativo de Cristian.<br>
+                    Conversación privada con fines de aprendizaje.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+
+</html>

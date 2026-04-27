@@ -1,25 +1,27 @@
 /* FUENTE MODERNA (POPPINS) */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
-/* VARIABLES DE COLOR MODERNAS */
+/* VARIABLES — tono más corporativo (azules profundos + acento cian) */
 :root {
-    --primary: #5e72e4;
-    --success: #2dce89;
-    --danger: #f5365c;
-    --dark: #212529;
-    --light: #f8f9fa;
-    --bg-body: #f6f9fc;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --success: #059669;
+    --danger: #dc2626;
+    --dark: #0f172a;
+    --light: #f8fafc;
+    --bg-body: #f1f5f9;
     --card-bg: #ffffff;
-    --text-muted: #8898aa;
-    --border-color: #e9ecef;
-    --shadow: 0 0 2rem 0 rgba(136, 152, 170, .15);
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+    --shadow-card: 0 25px 50px -12px rgba(15, 23, 42, 0.12);
 }
 
 /* ESTILOS GENERALES */
 body {
     background-color: var(--bg-body);
     color: var(--dark);
-    font-family: 'Poppins', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'DM Sans', 'Poppins', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -29,23 +31,129 @@ body {
     transition: background-color 0.3s ease;
 }
 
-/* NUEVO: Fondo animado para las páginas de autenticación */
+/* Fondo corporativo (login / registro): slate + acentos discretos */
 body.auth-background {
-    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-    background-size: 400% 400%;
-    animation: gradientBG 8s ease infinite;
+    background: linear-gradient(165deg, #0f172a 0%, #1e293b 40%, #0f172a 100%);
+    background-attachment: fixed;
 }
 
-@keyframes gradientBG {
-	0% {
-		background-position: 0% 50%;
-	}
-	50% {
-		background-position: 100% 50%;
-	}
-	100% {
-		background-position: 0% 50%;
-	}
+body.auth-background::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 100% 80% at 50% -30%, rgba(56, 189, 248, 0.14), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 100% 100%, rgba(99, 102, 241, 0.1), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 0% 80%, rgba(14, 165, 233, 0.06), transparent 45%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Centrado vertical del panel de acceso */
+body.auth-flow {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 1.25rem;
+    box-sizing: border-box;
+    position: relative;
+}
+
+body.auth-flow main {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 !important;
+    padding: 2rem 1.75rem !important;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+body.dark-mode.auth-flow main {
+    background: rgba(30, 41, 59, 0.92);
+    border-color: rgba(71, 85, 105, 0.5);
+}
+
+/* Chat solo cuando el usuario ya está en el dashboard principal */
+body:not(.dashboard-active) #chatbot-btn,
+body:not(.dashboard-active) #chatbot-window {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Marca corporativa en formularios de acceso */
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.auth-brand-compact {
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+}
+
+.auth-brand-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 50%, #4f46e5 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.auth-brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.auth-brand-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--dark);
+    line-height: 1.2;
+}
+
+body.dark-mode .auth-brand-title {
+    color: #f1f5f9;
+}
+
+.auth-brand-sub {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+}
+
+.auth-card-accent {
+    height: 3px;
+    width: 100%;
+    border-radius: 3px;
+    margin: -0.5rem 0 1rem;
+    background: linear-gradient(90deg, #0ea5e9, #6366f1, #8b5cf6);
+    opacity: 0.9;
 }
 
 /* SCROLLBAR PERSONALIZADO */
@@ -62,7 +170,7 @@ header {
     text-align: center;
 }
 
-/* ESTILOS PARA LOGIN/REGISTRO */
+/* ESTILOS PARA LOGIN/REGISTRO (fallback si aún no aplica auth-flow) */
 main {
     max-width: 420px;
     width: 90%;
@@ -77,16 +185,30 @@ main {
     border: 1px solid var(--border-color);
 }
 
-#login-view, #register-view, #verify-view {
+#login-view, #register-view, #verify-view,
+#forgot-password-view, #reset-password-view {
     display: flex;
     flex-direction: column;
     gap: 15px;
 }
 
-#login-view h2, #register-view h2, #verify-view h2 {
+#login-view h2, #register-view h2, #verify-view h2,
+#forgot-password-view h2, #reset-password-view h2 {
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
+    margin-top: 0;
     font-weight: 600;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    color: var(--dark);
+}
+
+body.dark-mode #login-view h2,
+body.dark-mode #register-view h2,
+body.dark-mode #verify-view h2,
+body.dark-mode #forgot-password-view h2,
+body.dark-mode #reset-password-view h2 {
+    color: #f1f5f9;
 }
 
 /* --- MODO OSCURO --- */
@@ -99,6 +221,12 @@ body.dark-mode {
     --shadow: none;
 }
 body.dark-mode main { border-color: var(--border-color); background: rgba(33, 54, 88, 0.9); }
+body.dark-mode.auth-flow main {
+    background: rgba(30, 41, 59, 0.94);
+}
+body.dark-mode .auth-brand {
+    border-bottom-color: var(--border-color);
+}
 body.dark-mode .card { background: rgba(33, 54, 88, 0.85); border: 1px solid var(--border-color); box-shadow: var(--shadow); }
 body.dark-mode .form-control { background-color: #1a2e4d; border-color: var(--border-color); color: #fff; }
 body.dark-mode .form-control::placeholder { color: #6c757d; }

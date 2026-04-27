@@ -1,0 +1,48 @@
+SysDash — acceso en tu servidor
+================================
+
+URL en la red local (mismo WiFi / LAN):
+  http://IP_DEL_SERVIDOR:8001
+  Ejemplo: http://192.168.1.49:8001
+
+FinCSDash en el panel (usuarios / correos)
+-------------------------------------------
+En ~/server-dashboard/sysdash.env añade las mismas variables que usa el backend
+FinCSDash (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD). Opcional: DB_PORT=5432
+En PostgreSQL local casi siempre: DB_SSLMODE=disable
+
+Ejemplo de líneas extra en sysdash.env:
+  DB_HOST=localhost
+  DB_NAME=fincsdash
+  DB_USER=cristians
+  DB_PASSWORD=TU_MISMA_CLAVE_QUE_EN_FINCDASH
+  DB_SSLMODE=disable
+
+Luego reinicia SysDash:
+  fuser -k 8001/tcp
+  cd ~/server-dashboard && nohup ./run-sysdash.sh >> gunicorn-sysdash.log 2>&1 &
+
+Token (copia desde el servidor, no compartas):
+  ssh cristians@192.168.1.49 "cat ~/server-dashboard/.token_readable_once.txt"
+  Luego puedes borrar ese archivo: rm ~/server-dashboard/.token_readable_once.txt
+
+Cloudflare Tunnel (recomendado para Internet sin abrir puertos)
+----------------------------------------------------------------
+Edita (con sudo) /etc/cloudflared/config.yml y añade ANTES de "- service: http_status:404":
+
+  - hostname: dash.TU_DOMINIO.com
+    service: http://127.0.0.1:8001
+
+Crea el hostname en Cloudflare (DNS del túnel) y reinicia:
+  sudo systemctl restart cloudflared
+
+FinCSDash no se toca: sigue en fincsdash.online → puerto 80.
+
+Seguridad
+---------
+Gunicorn escucha en 0.0.0.0:8001 (toda la red local). Si quieres solo localhost + túnel,
+cambia en run-sysdash.sh la línea gunicorn a --bind 127.0.0.1:8001 y reinicia el proceso.
+
+Arranque al reiniciar el servidor
+---------------------------------
+Crontab del usuario cristians incluye @reboot para run-sysdash.sh.

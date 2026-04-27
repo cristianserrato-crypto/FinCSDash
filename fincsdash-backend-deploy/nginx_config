@@ -1,0 +1,41 @@
+# Configuración de Nginx para FinCSDash
+# Ubicación sugerida en servidor: /etc/nginx/sites-available/fincsdash
+
+server {
+    listen 80;
+    server_name fincsdash.online;
+
+    root /var/www/fincsdash-frontend; # Ajustar a la ruta real en el servidor
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # La barra final en proxy_pass quita el prefijo /api/ para que /api/register -> backend /register
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name api.fincsdash.online;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Ajustes de tiempo de espera para procesos del bot
+        proxy_read_timeout 90;
+        proxy_connect_timeout 90;
+        proxy_send_timeout 90;
+    }
+}
