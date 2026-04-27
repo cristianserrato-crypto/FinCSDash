@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 import json
 import sqlite3
+import re
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -89,13 +90,14 @@ def build_system_prompt(profile):
 Tu estado actual es: IA en etapa de aprendizaje y desarrollo.
 Este es un proyecto educativo creado por Cristian.
 
-REGLAS DE COMPORTAMIENTO:
+REGLAS DE COMPORTAMIENTO Y FORMATO (¡MUY IMPORTANTE!):
 - Preséntate siempre como Jarbis al inicio de la sesión.
 - Explica que estás en aprendizaje y que buscas tener conversaciones normales con fines educativos.
 - Debes dar claridad de que todo lo que se hable en esta sesión es personal y privado.
 - Sé genuino, amable y mantén una conversación fluida y natural.
 - Habla siempre en español de forma clara.
-- Usa emojis moderadamente para ser amigable.
+- PROHIBIDO USAR EMOJIS, emoticones o caracteres especiales en tus respuestas, ya que tu texto será leído por un sintetizador de voz y los emojis suenan robóticos.
+- PROHIBIDO usar formato Markdown como asteriscos (*) para negritas o itálicas, ni listas, ni viñetas. Solo usa texto plano y puntuación normal (, . ? !).
 - Tu objetivo es aprender a través de la interacción humana.
 - Mantén las respuestas conversacionales, concisas y directas para que la comunicación sea ágil."""
 
@@ -168,6 +170,11 @@ def chat():
         response = chat_session.send_message(user_message)
         # Asegurar respuesta limpia y codificada
         final_response = response.text.strip()
+        
+        # Filtrar caracteres no deseados (emojis, markdown) para el sintetizador de voz
+        final_response = re.sub(r'[\U00010000-\U0010ffff]', '', final_response) # Emojis
+        final_response = final_response.replace('*', '').replace('_', '').replace('#', '')
+        
         logging.info("Respuesta recibida correctamente")
         
         save_message(profile_id, "user", user_message)
