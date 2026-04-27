@@ -163,6 +163,42 @@ body {
     animation: breathing 4s ease-in-out infinite;
 }
 
+.digital-mouth {
+    position: absolute;
+    bottom: 30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    background: var(--accent-light);
+    border-radius: 10px;
+    z-index: 4;
+    box-shadow: 0 0 15px var(--accent-light);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Hablando animation */
+.pulse-ring.speaking ~ .digital-mouth {
+    opacity: 1;
+    animation: talking-mouth 0.2s ease-in-out infinite alternate;
+}
+
+.pulse-ring.speaking ~ .avatar-img {
+    filter: brightness(1.2) contrast(1.1);
+    animation: speaking-shake 0.1s ease-in-out infinite alternate;
+}
+
+@keyframes talking-mouth {
+    from { width: 30px; height: 4px; box-shadow: 0 0 10px var(--accent-light); }
+    to { width: 50px; height: 10px; box-shadow: 0 0 25px var(--accent-light); }
+}
+
+@keyframes speaking-shake {
+    from { transform: scale(1.03) translateY(0); }
+    to { transform: scale(1.03) translateY(-1px); }
+}
+
 .video-overlay {
     position: absolute;
     top: 0;
