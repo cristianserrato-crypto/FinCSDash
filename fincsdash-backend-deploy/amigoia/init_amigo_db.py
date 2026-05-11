@@ -42,9 +42,9 @@ def init_db():
     # Crear un perfil de prueba si no hay ninguno
     c.execute("SELECT COUNT(*) FROM profiles")
     if c.fetchone()[0] == 0:
-        print("Creando perfil de Jarbis...")
+        print("Creando perfil de Cerbis...")
         c.execute("INSERT INTO profiles (name, personality, tone, interests) VALUES (?, ?, ?, ?)",
-                  ("Jarbis", "IA en aprendizaje, curioso y educado", "casual y educativo", "aprender de los humanos"))
+                  ("Cerbis", "IA en aprendizaje, curioso y educado", "casual y educativo", "aprender de los humanos"))
     
     conn.commit()
     conn.close()

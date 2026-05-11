@@ -1,4 +1,4 @@
-let activeProfileId = 1; // Jarbis siempre es el perfil 1
+let activeProfileId = 1; // Cerbis siempre es el perfil 1
 let isListening = false;
 let isSpeaking = false;
 let recognition = null;
@@ -72,7 +72,7 @@ function initSpeech() {
 }
 
 function setupEventListeners() {
-    document.getElementById('btn-start-jarbis').addEventListener('click', startJarbisSession);
+    document.getElementById('btn-start-cerbis').addEventListener('click', startCerbisSession);
     document.getElementById('btn-mic').addEventListener('click', toggleMic);
     document.getElementById('btn-end-call').addEventListener('click', endCall);
 }
@@ -82,12 +82,12 @@ function showScreen(name) {
     screens[name].classList.add('active');
 }
 
-function startJarbisSession() {
+function startCerbisSession() {
     showScreen('call');
     setCallStatus('Iniciando sesión...', 'thinking');
     
     setTimeout(() => {
-        const intro = "Hola, soy Jarbis. Soy una inteligencia artificial en etapa de aprendizaje y este es un proyecto educativo de Cristian. Me gustaría tener una conversación normal contigo para seguir aprendiendo. Ten en cuenta que todo lo que hablemos aquí es personal y privado. ¿De qué te gustaría hablar hoy?";
+        const intro = "Hola, soy Cerbis. Soy una inteligencia artificial en etapa de aprendizaje y este es un proyecto educativo de Cristian. Me gustaría tener una conversación normal contigo para seguir aprendiendo. Ten en cuenta que todo lo que hablemos aquí es personal y privado. ¿De qué te gustaría hablar hoy?";
         speakText(intro);
     }, 800);
 }
