@@ -1,0 +1,20 @@
+CÓMO AGREGAR LAS FOTOS AL CATÁLOGO
+==================================
+
+1. Copia tus 8 imágenes del catálogo de Serata dentro de esta carpeta "img".
+
+2. Renómbralas exactamente así (pueden ser .png o .jpg):
+
+   serata-1.png  →  Portada / collage (hero de la página)
+   serata-2.png  →  Conjunto floral de perlas + Perlas con sol
+   serata-3.png  →  Pulseras macramé
+   serata-4.png  →  Colección La Mirla (para la sección colección)
+   serata-5.png  →  Paloma blanca serena + Calavera brillante
+   serata-6.png  →  Perlas y girasol + Estrellas y corazones
+   serata-7.png  →  Estrellas y perlas celestiales + Collar con paloma
+   serata-8.png  →  Un día por siempre + Ojos turcos guardianes
+
+3. Si usas .jpg en lugar de .png, cambia en el archivo serata.html
+   cada "serata-X.png" por "serata-X.jpg" (o déjalas como .png).
+
+4. Guarda y vuelve a abrir serata.html en el navegador.

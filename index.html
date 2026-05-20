@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmigoIA - Chat Independiente</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .message { max-width: 80%; padding: 12px; border-radius: 15px; line-height: 1.4; }
+        .user { align-self: flex-end; background: #0084ff; color: white; }
+        .bot { align-self: flex-start; background: white; border: 1px solid #ddd; }
+        #input-area { background: white; padding: 20px; display: flex; gap: 10px; border-top: 1px solid #ddd; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; }
+        button { background: #0084ff; color: white; border: none; padding: 0 20px; border-radius: 25px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="chat-container"></div>
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="Habla con AmigoIA...">
+        <button onclick="sendMessage()">Enviar</button>
+    </div>
+
+    <script>
+        let sessionId = null;
+        const chatContainer = document.getElementById('chat-container');
+
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            appendMessage(text, 'user');
+            input.value = '';
+
+            const response = await fetch('http://TU_IP_SERVIDOR:5005/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, session_id: sessionId })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let botMessageDiv = appendMessage('', 'bot');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                lines.forEach(line => {
+                    if (line.startsWith('data: ')) {
+                        const data = line.replace('data: ', '');
+                        if (data === '[DONE]') return;
+                        if (!sessionId && data.length > 20) { sessionId = data; return; }
+                        botMessageDiv.innerText += data;
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                });
+            }
+        }
+
+        function appendMessage(text, side) {
+            const div = document.createElement('div');
+            div.className = `message ${side}`;
+            div.innerText = text;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return div;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+.env
+.env.*
+*.env
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+credentials.json
+token.pickle
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+dist/cache/
+.DS_Store

@@ -1,0 +1,24 @@
+[Unit]
+Description=Gunicorn instance to serve FinCSDash API
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/fincsdash/frontend/dist
+Environment="PATH=/var/www/fincsdash/backend/venv/bin"
+Environment="DB_HOST=localhost"
+Environment="DB_NAME=fincsdash"
+Environment="DB_USER=cristians"
+Environment="DB_PASSWORD=change_me"
+Environment="JWT_SECRET_KEY=change_me"
+Environment="GOOGLE_CLIENT_ID=741392813029-gao0840jino91t6rd1oeq8b972fkv1eh.apps.googleusercontent.com"
+Environment="MAIL_USERNAME=tu_correo@gmail.com"
+Environment="MAIL_PASSWORD=tu_app_password"
+Environment="AWS_BUCKET_NAME=tu_bucket"
+Environment="AWS_REGION=us-east-1"
+ExecStart=/var/www/fincsdash/backend/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
