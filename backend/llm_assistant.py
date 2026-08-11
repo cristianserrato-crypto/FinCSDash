@@ -15,9 +15,13 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+# Instancia de Ollama dedicada a FinCSDash (systemd nativo, puerto 11435).
+# Es independiente de la instancia Docker de Majic3D en el puerto 11434
+# (ver /var/www/projects/doker/n8n): no se comparte proceso, modelos ni RAM
+# entre los dos proyectos.
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11435")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
-OLLAMA_TIMEOUT_SECONDS = int(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "45"))
+OLLAMA_TIMEOUT_SECONDS = int(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "55"))
 
 INTENTS = [
     "add_expense",
