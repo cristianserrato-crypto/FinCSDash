@@ -12,10 +12,122 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet"/>
+    
     <!-- Estilos -->
     <!-- Conecta este archivo con la hoja de estilos CSS para que se vea bonito -->
     <link rel="stylesheet" href="css/styles.css">
+
+    <!-- Three.js importmap — DEBE ir antes de cualquier script clásico o de módulo -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+
+    <!-- Tailwind CSS CDN y Configuración -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        try {
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        "colors": {
+                            "surface-tint": "#565e74",
+                            "on-surface-variant": "#45464d",
+                            "secondary-fixed": "#6ffbbe",
+                            "tertiary-fixed": "#d8e2ff",
+                            "surface-container-highest": "#e0e3e5",
+                            "tertiary": "#000000",
+                            "on-secondary-fixed-variant": "#005236",
+                            "on-surface": "#191c1e",
+                            "surface": "#f7f9fb",
+                            "secondary": "#006c49",
+                            "on-primary": "#ffffff",
+                            "on-tertiary-fixed-variant": "#004395",
+                            "on-tertiary": "#ffffff",
+                            "on-secondary": "#ffffff",
+                            "on-primary-container": "#7c839b",
+                            "surface-container-low": "#f2f4f6",
+                            "secondary-fixed-dim": "#4edea3",
+                            "outline": "#76777d",
+                            "tertiary-container": "#001a42",
+                            "error-container": "#ffdad6",
+                            "inverse-on-surface": "#eff1f3",
+                            "surface-dim": "#d8dadc",
+                            "background": "#f7f9fb",
+                            "error": "#ba1a1a",
+                            "surface-bright": "#f7f9fb",
+                            "on-primary-fixed-variant": "#3f465c",
+                            "on-secondary-fixed": "#002113",
+                            "on-secondary-container": "#00714d",
+                            "surface-variant": "#e0e3e5",
+                            "primary-fixed-dim": "#bec6e0",
+                            "primary": "#000000",
+                            "primary-fixed": "#dae2fd",
+                            "tertiary-fixed-dim": "#adc6ff",
+                            "inverse-surface": "#2d3133",
+                            "surface-container-high": "#e6e8ea",
+                            "primary-container": "#131b2e",
+                            "secondary-container": "#6cf8bb",
+                            "on-error-container": "#93000a",
+                            "on-error": "#ffffff",
+                            "surface-container": "#eceef0",
+                            "on-background": "#191c1e",
+                            "outline-variant": "#c6c6cd",
+                            "on-tertiary-container": "#3980f4",
+                            "inverse-primary": "#bec6e0",
+                            "on-tertiary-fixed": "#001a42",
+                            "surface-container-lowest": "#ffffff",
+                            "on-primary-fixed": "#131b2e"
+                        },
+                        "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                        },
+                        "spacing": {
+                            "xl": "64px",
+                            "sm": "16px",
+                            "lg": "40px",
+                            "container-max": "1280px",
+                            "md": "24px",
+                            "base": "4px",
+                            "xs": "8px",
+                            "gutter": "24px"
+                        },
+                        "fontFamily": {
+                            "headline-lg-mobile": ["Inter"],
+                            "label-md": ["Inter"],
+                            "headline-lg": ["Inter"],
+                            "numeric-data": ["Inter"],
+                            "headline-md": ["Inter"],
+                            "label-sm": ["Inter"],
+                            "display": ["Inter"],
+                            "body-md": ["Inter"],
+                            "body-lg": ["Inter"]
+                        },
+                        "fontSize": {
+                            "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                            "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "numeric-data": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                            "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                            "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                            "display": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                        }
+                    },
+                },
+            }
+        } catch (_e) {}
+    </script>
 
     <!-- Google Identity -->
     <!-- Carga la librería de Google para poder iniciar sesión con Gmail -->
@@ -27,8 +139,23 @@
     <!-- Carga el archivo principal de JavaScript que controla toda la aplicación -->
     <!-- 'defer' significa que espera a que el HTML cargue antes de ejecutarse -->
     <script src="js/app.js" defer></script>
+
+    <!-- Three.js animación neuronal -->
+    <script type="module">
+        import { initAnimation } from './js/animation.js';
+        document.addEventListener("DOMContentLoaded", () => {
+            initAnimation('global-canvas-container');
+        });
+    </script>
 </head>
 <body>
+<!-- Global Canvas Background -->
+<div id="global-canvas-container" aria-hidden="true"></div>
+
+<!-- Botón de cambio de tema global para pantallas de autenticación -->
+<button type="button" id="authThemeToggleBtn" onclick="toggleDarkMode()" aria-label="Cambiar tema">
+    <span class="material-symbols-outlined" id="loginThemeIcon">dark_mode</span>
+</button>
 
 <!-- Encabezado de la página (barra superior) -->
 <header>
@@ -40,28 +167,102 @@
 
 <!-- LOGIN -->
 <!-- Sección de inicio de sesión. Tiene un ID para poder ocultarla o mostrarla con JS -->
-<section id="login-view">
-    <h2>Login</h2>
+<section id="login-view" style="position: relative;">
+
+    <div class="auth-brand">
+        <img src="logo.png" alt="FinCSDash">
+        <div>
+            <strong>FinCSDash</strong>
+            <span>Tu dinero, bajo control</span>
+        </div>
+    </div>
+    <h2>Bienvenido</h2>
+    <p class="auth-subtitle">Inicia sesión y continúa administrando tus finanzas personales de forma inteligente.</p>
 
     <!-- Campo de texto para escribir el email -->
-    <input type="email" id="loginEmail" placeholder="Email">
-    <input type="password" id="loginPassword" placeholder="Contraseña">
+    <div class="auth-field auth-field-email">
+        <input type="email" id="loginEmail" placeholder="Correo electrónico" autocomplete="email">
+    </div>
+    <div class="auth-field auth-field-password">
+        <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password">
+        <button type="button" class="auth-eye" onclick="toggleLoginPassword()" aria-label="Mostrar contraseña"></button>
+    </div>
+
+    <div class="auth-options">
+        <label class="remember-option" for="rememberMe">
+            <input type="checkbox" id="rememberMe">
+            <span>Recordarme</span>
+        </label>
+        <a href="#" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</a>
+    </div>
 
     <!-- Botón que al hacer clic ejecuta la función 'login()' de JavaScript -->
     <button onclick="login()">Ingresar</button>
 
-    <!-- NUEVO: Enlace para restablecer contraseña -->
-    <a href="#" onclick="showForgotPassword()" style="text-align: center; display: block; margin-top: 10px; font-size: 0.9rem; color: var(--primary);">¿Olvidaste tu contraseña?</a>
-
     <!-- Contenedor vacío donde Google dibujará su botón de "Iniciar sesión" -->
-    <div id="googleBtn" style="display: flex; justify-content: center; margin-top: 15px;"></div>
+    <div id="googleBtn"></div>
 
     <!-- Párrafo vacío para mostrar mensajes de error o éxito -->
     <p id="loginMsg"></p>
 
     <!-- Botón para cambiar a la vista de registro -->
-    <button onclick="showRegister()">Registrarse</button>
+    <p class="auth-register-copy">¿No tienes cuenta? <button type="button" onclick="showRegister()">Regístrate</button></p>
 </section>
+
+<aside class="auth-visual" aria-hidden="true">
+
+    <div class="floating-tile tile-pig">
+        <span class="tile-icon tile-icon-pig"></span>
+    </div>
+    <div class="floating-tile tile-chart">
+        <span class="tile-icon tile-icon-chart"></span>
+    </div>
+    <div class="floating-tile tile-wallet">
+        <span class="tile-icon tile-icon-wallet"></span>
+    </div>
+    <div class="floating-tile tile-growth">
+        <span class="tile-icon tile-icon-growth"></span>
+    </div>
+
+    <div class="finance-phone">
+        <div class="phone-menu"><span></span><span></span><span></span></div>
+        <p>Balance Total</p>
+        <strong>$24.580,00</strong>
+        <em>+12% esta semana</em>
+
+        <svg class="visual-chart" viewBox="0 0 330 142" role="img" aria-label="">
+            <path class="chart-fill" d="M8 112 C30 86 48 102 66 78 C88 48 105 82 126 72 C151 62 160 30 190 38 C215 46 218 70 246 55 C272 40 278 24 314 10 L314 134 L8 134 Z"></path>
+            <path class="chart-line" d="M8 112 C30 86 48 102 66 78 C88 48 105 82 126 72 C151 62 160 30 190 38 C215 46 218 70 246 55 C272 40 278 24 314 10"></path>
+        </svg>
+
+        <div class="finance-row">
+            <div>
+                <span>Gastos del mes</span>
+                <strong>$1.450,00</strong>
+            </div>
+            <b>0%</b>
+        </div>
+        <div class="finance-row">
+            <div>
+                <span>Ahorros</span>
+                <strong>$5.200,00</strong>
+            </div>
+            <b>8%</b>
+        </div>
+        <div class="chart-legend">
+            <span><i></i>Ingresos</span>
+            <span><i></i>Gastos</span>
+        </div>
+    </div>
+
+    <div class="security-card">
+        <span class="lock-icon"></span>
+        <div>
+            <strong>Tus datos están<br>100% protegidos</strong>
+            <span>Cifrado AES-256</span>
+        </div>
+    </div>
+</aside>
 
 <!-- REGISTRO -->
 <!-- Sección de registro. 'style="display:none;"' significa que inicia oculta -->
@@ -247,147 +448,201 @@
 
 <!-- DASHBOARD -->
 <!-- Sección principal del usuario, inicia oculta hasta que se loguee -->
-<section id="dashboard-view" style="display:none;">
-    <h2>Dashboard</h2>
-    <!-- Aquí se mostrará el correo del usuario conectado -->
-    <p>Bienvenido <b id="userEmail"></b></p>
-    <!-- Botón para cerrar sesión -->
-    <button onclick="logout()">Cerrar sesión</button>
-</section>
+<section id="dashboard-view" style="display:none;"></section>
 
 </main>
 
 <!-- MODAL EDITAR INGRESO BASE -->
 <div id="edit-base-income-modal" class="modal-overlay">
-    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">✏️ Actualizar Ingreso Base</h3>
-        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 20px;">Este valor se usará para calcular tu presupuesto en los meses futuros.</p>
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-xs">✏️ Actualizar Ingreso Base</h3>
+        <p class="font-body-md text-body-md text-on-surface-variant mb-md">Este valor se usará para calcular tu presupuesto en los meses futuros.</p>
         
-        <label class="form-label">Nuevo Ingreso Mensual</label>
-        <input type="number" id="editBaseIncomeAmount" class="form-control form-group" placeholder="0.00">
+        <div class="mb-md">
+            <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nuevo Ingreso Mensual</label>
+            <input type="number" id="editBaseIncomeAmount" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm" placeholder="0.00">
+        </div>
         
-        <div class="flex-gap">
-            <button onclick="closeModal('edit-base-income-modal')" class="btn btn-secondary">Cancelar</button>
-            <button onclick="saveBaseIncome()" class="btn btn-primary">Guardar</button>
+        <div class="flex gap-sm">
+            <button onclick="closeModal('edit-base-income-modal')" class="flex-1 border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cancelar</button>
+            <button onclick="saveBaseIncome()" class="flex-1 bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors shadow-sm font-bold">Guardar</button>
         </div>
     </div>
 </div>
 
 <!-- MODAL EDITAR GASTO RECURRENTE -->
 <div id="edit-recurring-modal" class="modal-overlay">
-    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">✏️ Editar Pago</h3>
-        <p id="editRecCategoryDisplay" class="text-muted" style="margin-bottom: 20px;"></p>
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-xs">✏️ Editar Pago</h3>
+        <p id="editRecCategoryDisplay" class="font-body-md text-body-md text-on-surface-variant mb-md"></p>
         
         <input type="hidden" id="editRecId">
         
-        <label class="form-label">Nuevo Monto</label>
-        <input type="number" id="editRecAmount" class="form-control form-group">
+        <div class="space-y-sm mb-md">
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nuevo Monto</label>
+                <input type="number" id="editRecAmount" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
+            </div>
+            
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Día de Pago (1-31)</label>
+                <input type="number" id="editRecDay" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm" min="1" max="31">
+            </div>
+        </div>
         
-        <label class="form-label">Día de Pago (1-31)</label>
-        <input type="number" id="editRecDay" class="form-control form-group" min="1" max="31">
-        
-        <div class="flex-gap">
-            <button onclick="deleteRecurringExpense()" class="btn btn-danger" style="width: auto;" title="Eliminar">🗑️</button>
-            <button onclick="closeModal('edit-recurring-modal')" class="btn btn-secondary">Cancelar</button>
-            <button onclick="saveRecurringEdit()" class="btn btn-primary">Guardar</button>
+        <div class="flex gap-sm">
+            <button onclick="deleteRecurringExpense()" class="bg-error text-on-error font-label-sm text-label-sm px-sm py-sm rounded-lg hover:opacity-90 transition-colors flex items-center justify-center" title="Eliminar">
+                <span class="material-symbols-outlined">delete</span>
+            </button>
+            <button onclick="closeModal('edit-recurring-modal')" class="flex-1 border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cancelar</button>
+            <button onclick="saveRecurringEdit()" class="flex-1 bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors shadow-sm font-bold">Guardar</button>
         </div>
     </div>
 </div>
 
 <!-- MODAL NUEVA META -->
 <div id="add-savings-modal" class="modal-overlay">
-    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">🎯 Nueva Meta</h3>
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-md">🎯 Nueva Meta</h3>
         
-        <label class="form-label">Nombre (ej: Viaje)</label>
-        <input type="text" id="newSavingsName" class="form-control form-group">
-        
-        <label class="form-label">Monto Objetivo ($)</label>
-        <input type="number" id="newSavingsTarget" class="form-control form-group">
-        
-        <label class="form-label">Fecha Límite</label>
-        <input type="date" id="newSavingsDate" class="form-control form-group">
-        
-        <!-- NUEVO: Selector de Moneda -->
-        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
-            <input type="checkbox" id="isUsdGoal" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="isUsdGoal" style="margin: 0; cursor: pointer; font-size: 0.9rem;">💵 Ahorrar en Dólares (USD)</label>
+        <div class="space-y-sm mb-md">
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nombre (ej: Viaje)</label>
+                <input type="text" id="newSavingsName" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
+            </div>
+            
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Monto Objetivo ($)</label>
+                <input type="number" id="newSavingsTarget" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
+            </div>
+            
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Fecha Límite</label>
+                <input type="date" id="newSavingsDate" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
+            </div>
+            
+            <div class="p-sm bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-sm">
+                <input type="checkbox" id="isUsdGoal" class="w-5 h-5 cursor-pointer text-primary border-outline-variant rounded focus:ring-primary">
+                <label for="isUsdGoal" class="cursor-pointer font-label-sm text-label-sm text-on-surface-variant">💵 Ahorrar en Dólares (USD)</label>
+            </div>
         </div>
         
-        <div class="flex-gap">
-            <button onclick="closeModal('add-savings-modal')" class="btn btn-secondary">Cancelar</button>
-            <button onclick="saveSavingsGoal()" class="btn btn-primary">Crear</button>
+        <div class="flex gap-sm">
+            <button onclick="closeModal('add-savings-modal')" class="flex-1 border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cancelar</button>
+            <button onclick="saveSavingsGoal()" class="flex-1 bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors shadow-sm font-bold">Crear</button>
         </div>
     </div>
 </div>
 
 <!-- MODAL SELECCIONAR FONDO (WALLPAPER) -->
 <div id="wallpaper-modal" class="modal-overlay">
-    <div class="card" style="width: 500px; max-width: 95%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">🎨 Elige un Fondo</h3>
-        <div id="wallpaper-grid" class="wallpaper-grid">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-md">🎨 Elige un Fondo</h3>
+        <div id="wallpaper-grid" class="wallpaper-grid grid grid-cols-3 gap-sm max-h-72 overflow-y-auto p-xs">
             <!-- Las imágenes se cargarán aquí con JS -->
         </div>
-        <button onclick="closeModal('wallpaper-modal')" class="btn btn-secondary w-100" style="margin-top: 20px;">Cerrar</button>
+        <button onclick="closeModal('wallpaper-modal')" class="w-full mt-md border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cerrar</button>
     </div>
 </div>
 
 <!-- MODAL EDITAR PERFIL -->
 <div id="edit-profile-modal" class="modal-overlay">
-    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">👤 Editar Perfil</h3>
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-md">👤 Editar Perfil</h3>
         
-        <label class="form-label">Nombre</label>
-        <input type="text" id="editProfileName" class="form-control form-group" placeholder="Tu nombre">
+        <div class="space-y-sm mb-md">
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nombre</label>
+                <input type="text" id="editProfileName" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm" placeholder="Tu nombre">
+            </div>
+            
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nueva Contraseña (Opcional)</label>
+                <input type="password" id="editProfilePassword" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm" placeholder="Dejar vacío para no cambiar">
+            </div>
+        </div>
         
-        <label class="form-label">Nueva Contraseña (Opcional)</label>
-        <input type="password" id="editProfilePassword" class="form-control form-group" placeholder="Dejar vacío para no cambiar">
-        
-        <div class="flex-gap">
-            <button onclick="closeModal('edit-profile-modal')" class="btn btn-secondary">Cancelar</button>
-            <button onclick="saveProfileUpdate()" class="btn btn-primary">Guardar</button>
+        <div class="flex gap-sm">
+            <button onclick="closeModal('edit-profile-modal')" class="flex-1 border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cancelar</button>
+            <button onclick="saveProfileUpdate()" class="flex-1 bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors shadow-sm font-bold">Guardar</button>
         </div>
     </div>
 </div>
 
 <!-- MODAL ACTUALIZAR AHORRO -->
 <div id="update-savings-modal" class="modal-overlay">
-    <div class="card" style="width: 350px; max-width: 90%; margin: 0;">
-        <h3 style="margin-bottom: 15px;">💰 Actualizar Ahorro</h3>
-        <p id="updateSavingsNameDisplay" class="text-muted"></p>
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-lg border border-outline-variant card">
+        <h3 class="font-headline-md text-headline-md text-primary mb-xs">💰 Actualizar Ahorro</h3>
+        <p id="updateSavingsNameDisplay" class="font-body-md text-body-md text-on-surface-variant mb-md"></p>
+        
         <input type="hidden" id="updateSavingsId">
         <input type="hidden" id="updateSavingsCurrent">
         
-        <label class="form-label">Monto a agregar ($)</label>
-        <input type="number" id="addSavingsAmount" class="form-control form-group" placeholder="0.00">
-        
-        <!-- NUEVO: Checkbox para descontar del saldo -->
-        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
-            <input type="checkbox" id="deductFromBalance" style="width: 18px; height: 18px; cursor: pointer;" checked>
-            <label for="deductFromBalance" style="margin: 0; cursor: pointer; font-size: 0.9rem;">📉 Descontar del saldo (Registrar Gasto)</label>
+        <div class="space-y-sm mb-md">
+            <div>
+                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Monto a agregar ($)</label>
+                <input type="number" id="addSavingsAmount" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm" placeholder="0.00">
+            </div>
+            
+            <div class="p-sm bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-sm">
+                <input type="checkbox" id="deductFromBalance" class="w-5 h-5 cursor-pointer text-primary border-outline-variant rounded focus:ring-primary" checked>
+                <label for="deductFromBalance" class="cursor-pointer font-label-sm text-label-sm text-on-surface-variant">📉 Descontar del saldo (Registrar Gasto)</label>
+            </div>
         </div>
 
-        <div class="flex-gap">
-            <button onclick="closeModal('update-savings-modal')" class="btn btn-secondary">Cancelar</button>
-            <button onclick="saveSavingsUpdate()" class="btn btn-success">Agregar</button>
+        <div class="flex gap-sm">
+            <button onclick="closeModal('update-savings-modal')" class="flex-1 border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">Cancelar</button>
+            <button onclick="saveSavingsUpdate()" class="flex-1 bg-secondary text-on-secondary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors shadow-sm font-bold">Agregar</button>
+        </div>
+    </div>
+</div>
+
+<!-- PANTALLA DE CARGA POST-LOGIN (circuito animado, original) -->
+<div id="post-login-loader" aria-hidden="true">
+    <div class="circuit-grid-bg"></div>
+    <svg class="circuit-traces" viewBox="0 0 800 450" preserveAspectRatio="none">
+        <path id="circuitPath1" class="circuit-line" d="M40,360 L40,280 L140,280 L140,190 L260,190 L260,90" />
+        <path id="circuitPath2" class="circuit-line" d="M760,70 L760,150 L640,150 L640,230 L520,230 L520,340" />
+        <path id="circuitPath3" class="circuit-line" d="M70,60 L200,60 L200,130 L330,130 L330,60" />
+        <path id="circuitPath4" class="circuit-line" d="M730,390 L730,300 L610,300 L610,220" />
+        <path id="circuitPath5" class="circuit-line" d="M230,400 L230,320 L360,320 L360,220 L470,220 L470,120" />
+        <path id="circuitPath6" class="circuit-line" d="M400,40 L400,110 L480,110 L480,180" />
+        <circle r="3.2" class="circuit-dot" style="color:#22c55e;"><animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto"><mpath href="#circuitPath1" /></animateMotion></circle>
+        <circle r="3.2" class="circuit-dot" style="color:#0ea5e9;"><animateMotion dur="4.1s" repeatCount="indefinite" begin="0.5s"><mpath href="#circuitPath2" /></animateMotion></circle>
+        <circle r="2.6" class="circuit-dot" style="color:#22c55e;"><animateMotion dur="2.8s" repeatCount="indefinite" begin="1s"><mpath href="#circuitPath3" /></animateMotion></circle>
+        <circle r="2.6" class="circuit-dot" style="color:#0ea5e9;"><animateMotion dur="3.1s" repeatCount="indefinite" begin="0.2s"><mpath href="#circuitPath4" /></animateMotion></circle>
+        <circle r="3.2" class="circuit-dot" style="color:#22c55e;"><animateMotion dur="3.8s" repeatCount="indefinite" begin="0.8s"><mpath href="#circuitPath5" /></animateMotion></circle>
+        <circle r="2.6" class="circuit-dot" style="color:#0ea5e9;"><animateMotion dur="2.4s" repeatCount="indefinite" begin="1.3s"><mpath href="#circuitPath6" /></animateMotion></circle>
+    </svg>
+    <div class="loader-core">
+        <div class="loader-ring">
+            <img src="logo.png" alt="FinCSDash">
+        </div>
+        <div class="loader-text">
+            Cargando
+            <span class="loader-dots"><span>.</span><span>.</span><span>.</span></span>
         </div>
     </div>
 </div>
 
 <!-- CHATBOT FLOTANTE -->
-<button id="chatbot-btn" onclick="toggleChat()" title="Asistente Virtual">💬</button>
+<button id="chatbot-btn" onclick="toggleChat()" title="Asistente Virtual" aria-label="Chat with assistant" class="fixed bottom-8 right-8 w-16 h-16 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center z-[100] hover:scale-110 transition-transform duration-300 focus:outline-none ring-4 ring-white">
+    <span class="material-symbols-outlined text-headline-md">chat</span>
+</button>
+
+<!-- LOGO FLOTANTE DE FINCSDASH EN LOGIN -->
+<img src="logo.png" alt="FinCSDash" class="auth-floating-logo">
 
 <div id="chatbot-window">
     <div class="chat-header">
-        <h4>🤖 Asistente FinCS</h4>
+        <h4>🤖 Asistente FinCS IA</h4>
         <button onclick="toggleChat()" style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;">✖</button>
     </div>
     <div id="chat-messages" class="chat-body">
         <!-- Los mensajes se cargarán dinámicamente -->
     </div>
     <div class="chat-input-area">
-        <input type="text" id="chatInput" placeholder="Escribe aquí..." onkeypress="handleChatKey(event)">
+        <input type="text" id="chatInput" placeholder="Ej: gasté 20000 en transporte hoy" onkeypress="handleChatKey(event)">
         <button onclick="sendChatMessage()">➤</button>
     </div>
 </div>

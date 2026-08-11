@@ -13,6 +13,8 @@ import re
 import uuid
 import random
 import secrets
+import logging
+import time
 from datetime import datetime, timedelta, timezone
 import calendar
 
@@ -26,8 +28,11 @@ from flask_jwt_extended import (
     get_jwt_identity,
     verify_jwt_in_request
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from sqlalchemy.exc import OperationalError as SQLAlchemyOperationalError
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -40,22 +45,89 @@ from fpdf import FPDF
 # =========================
 # IMPORTS INTERNOS
 # =========================
-from database import conectar_db, crear_tablas
+from database import db, conectar_db, crear_tablas, Usuario, Ingreso, Gasto, Categoria, GastoRecurrente, MetaAhorro
 from gmail_service import enviar_correo
 from bot import obtener_frase_motivacional
+import llm_assistant
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
 
 # =========================
 # CONFIGURACIÓN APP
 # =========================
 app = Flask(__name__)
+
+# Origenes permitidos para CORS. En producción se debe definir CORS_ORIGINS
+# con la(s) URL(s) reales del frontend (separadas por coma); "*" solo se usa
+# como valor por defecto para no romper entornos de desarrollo.
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
+CORS_ORIGINS = [o.strip() for o in _cors_origins_env.split(",") if o.strip()] or ["*"]
+
 CORS(app, resources={
     r"/*": {
-        "origins": ["https://fincsdash.online"],
+        "origins": CORS_ORIGINS,
         "allow_headers": ["Content-Type", "Authorization"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     }
 })
 
+# Límite de tamaño de petición (bytes) para evitar agotar memoria con payloads
+# gigantes (p.ej. imágenes base64 o JSON masivo). 5 MB por defecto.
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH_BYTES", 5 * 1024 * 1024))
+
+# --- RATE LIMITING (mitigación de fuerza bruta y DoS) ---
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[os.environ.get("RATE_LIMIT_DEFAULT", "200 per hour")],
+    storage_uri=os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://"),
+)
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+@app.errorhandler(429)
+def handle_rate_limit(error):
+    return jsonify({
+        "message": "Demasiadas solicitudes. Intenta de nuevo más tarde.",
+        "recoverable": True
+    }), 429
+
+# --- CONFIGURACIÓN DE BASE DE DATOS (URI) ---
+DB_USER = os.environ.get("DB_USER")
+DB_PASS = os.environ.get("DB_PASSWORD")
+DB_HOST = os.environ.get("DB_HOST")
+DB_NAME = os.environ.get("DB_NAME")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_SSLMODE = os.environ.get("DB_SSLMODE", "prefer")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={DB_SSLMODE}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE_SECONDS", "300")),
+    "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT_SECONDS", "10")),
+    "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+    "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
+    "connect_args": {
+        "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "5")),
+        "application_name": os.environ.get("DB_APPLICATION_NAME", "fincsdash"),
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
+}
+db.init_app(app)
 
 # --- VARIABLES DE ENTORNO OBLIGATORIAS ---
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
@@ -70,14 +142,77 @@ if not GOOGLE_CLIENT_ID:
     raise Exception("GOOGLE_CLIENT_ID no configurado")
 
 # --- JWT ---
-
+# Sesiones de corta duración: por defecto 1 hora, configurable por entorno.
+# Evita que un token robado/filtrado quede válido indefinidamente.
 app.config["JWT_SECRET_KEY"] = JWT_SECRET_KEY
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(
+    minutes=int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60"))
+)
 jwt = JWTManager(app)
+
+
+# Hash "señuelo" usado para comparar contraseñas cuando el usuario no existe,
+# de forma que el tiempo de respuesta de /login no revele si un email está
+# registrado (mitiga enumeración de usuarios por timing).
+_DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_hex(32))
+
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.environ.get("LOGIN_LOCKOUT_MINUTES", "15"))
+
+
+def db_unavailable_response(error):
+    logger.warning("Base de datos temporalmente no disponible: %s", error)
+    db.session.rollback()
+    return jsonify({
+        "message": "El servidor se esta reconectando. Intenta de nuevo en unos segundos.",
+        "recoverable": True
+    }), 503
+
+
+@app.errorhandler(psycopg2.OperationalError)
+def handle_psycopg_operational_error(error):
+    return db_unavailable_response(error)
+
+
+@app.errorhandler(SQLAlchemyOperationalError)
+def handle_sqlalchemy_operational_error(error):
+    return db_unavailable_response(error)
+
+
+@app.teardown_appcontext
+def cleanup_db_session(error=None):
+    if error:
+        db.session.rollback()
+    db.session.remove()
 
 # =========================
 # CREAR TABLAS
 # =========================
-crear_tablas()
+def crear_tablas_con_reintentos(app, intentos=None, espera=None):
+    intentos = int(os.environ.get("DB_INIT_MAX_RETRIES", intentos or 12))
+    espera = float(os.environ.get("DB_INIT_RETRY_DELAY_SECONDS", espera or 5))
+
+    for intento in range(1, intentos + 1):
+        try:
+            crear_tablas(app)
+            return
+        except Exception:
+            if intento >= intentos:
+                logger.exception("No fue posible inicializar la base de datos")
+                raise
+
+            logger.warning(
+                "Base de datos no disponible al iniciar; reintentando en %.1fs (%s/%s)",
+                espera,
+                intento,
+                intentos,
+            )
+            time.sleep(espera)
+
+
+crear_tablas_con_reintentos(app)
 
 # =========================
 # RUTA PRINCIPAL
@@ -90,13 +225,17 @@ def index():
 # REGISTRO
 # =========================
 @app.route("/register", methods=["POST"])
+@limiter.limit("5 per minute")
 def register():
-    data = request.json
-    email = data.get("email")
-    password = data.get("password")
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
 
     if not email or not password:
         return jsonify({"message": "Email y contraseña requeridos"}), 400
+
+    if not EMAIL_REGEX.match(email) or len(email) > 120:
+        return jsonify({"message": "Email inválido"}), 400
 
     if not (
         8 <= len(password) <= 16
@@ -110,47 +249,63 @@ def register():
     hashed = generate_password_hash(password)
     codigo = str(random.randint(100000, 999999))
 
-    conn = conectar_db()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-    if cursor.fetchone():
-        conn.close()
+    if Usuario.query.filter_by(email=email).first():
         return jsonify({"message": "Usuario ya existe"}), 400
 
-    cursor.execute("""
-        INSERT INTO usuarios (email, password, verificado, codigo_verificacion)
-        VALUES (%s, %s, 0, %s)
-    """, (email, hashed, codigo))
-
-    conn.commit()
-    conn.close()
+    nuevo_usuario = Usuario(email=email, password=hashed, verificado=0, codigo_verificacion=codigo)
+    db.session.add(nuevo_usuario)
+    db.session.commit()
 
     # Enviar correo
-    enviar_correo(email, "Verifica tu cuenta - FinCSDash", f"<h1>Tu código es: {codigo}</h1>")
+    try:
+        enviar_correo(email, "Verifica tu cuenta - FinCSDash", f"<h1>Tu código es: {codigo}</h1>")
+    except Exception:
+        logger.exception("No se pudo enviar el correo de verificacion a %s", email)
 
-    return jsonify({"message": "Usuario registrado. Revisa tu correo."}), 201
+    return jsonify({"message": "Usuario registrado correctamente. Revisa tu correo."}), 201
 # =========================
 # LOGIN
 # =========================
 @app.route("/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def login():
-    data = request.json
-    email = data.get("email")
-    password = data.get("password")
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
 
-    conn = conectar_db()
-    cursor = conn.cursor()
+    if not email or not password:
+        return jsonify({"message": "Email y contraseña requeridos"}), 400
 
-    cursor.execute("SELECT password FROM usuarios WHERE email = %s", (email,))
-    row = cursor.fetchone()
-    conn.close()
+    user = Usuario.query.filter_by(email=email).first()
+    now = datetime.now(timezone.utc)
 
-    if not row or not check_password_hash(row[0], password):
+    # Cuenta bloqueada temporalmente por demasiados intentos fallidos
+    if user and user.locked_until:
+        locked_until = user.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if locked_until > now:
+            return jsonify({
+                "message": "Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intenta más tarde."
+            }), 423
+
+    # Siempre se ejecuta un check_password_hash (contra un hash señuelo si el
+    # usuario no existe) para que el tiempo de respuesta no permita enumerar
+    # emails registrados.
+    password_hash = user.password if user else _DUMMY_PASSWORD_HASH
+    password_ok = check_password_hash(password_hash, password)
+
+    if not user or not password_ok:
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= LOGIN_MAX_ATTEMPTS:
+                user.locked_until = now + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+            db.session.commit()
         return jsonify({"message": "Credenciales incorrectas"}), 401
 
-    # Verificar si está verificado (opcional, según tu lógica)
-    # Si deseas bloquear login a no verificados, descomenta y ajusta la consulta SQL arriba para traer 'verificado'
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    db.session.commit()
 
     token = create_access_token(identity=email)
     return jsonify({"token": token}), 200
@@ -159,6 +314,7 @@ def login():
 # GOOGLE LOGIN
 # =========================
 @app.route("/google-login", methods=["POST"])
+@limiter.limit("10 per minute")
 def google_login():
     token = request.json.get("token")
 
@@ -171,18 +327,11 @@ def google_login():
 
         email = info["email"]
 
-        conn = conectar_db()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-        if not cursor.fetchone():
-            cursor.execute("""
-                INSERT INTO usuarios (email, password, verificado)
-                VALUES (%s, %s, 1)
-            """, (email, str(uuid.uuid4())))
-            conn.commit()
-
-        conn.close()
+        user = Usuario.query.filter_by(email=email).first()
+        if not user:
+            user = Usuario(email=email, password=str(uuid.uuid4()), verificado=1)
+            db.session.add(user)
+            db.session.commit()
 
         jwt_token = create_access_token(identity=email)
         return jsonify({"token": jwt_token, "email": email, "message": "Login exitoso"}), 200
@@ -194,46 +343,40 @@ def google_login():
 # VERIFICACIÓN Y PASSWORD
 # =========================
 @app.route("/verify", methods=["POST"])
+@limiter.limit("10 per minute")
 def verify_code():
     data = request.json
     email = data.get("email")
     codigo = data.get("codigo")
     
-    conn = conectar_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT codigo_verificacion FROM usuarios WHERE email=%s", (email,))
-    row = cursor.fetchone()
+    user = Usuario.query.filter_by(email=email).first()
     
-    if row and row[0] == codigo:
-        cursor.execute("UPDATE usuarios SET verificado=1 WHERE email=%s", (email,))
-        conn.commit()
-        conn.close()
+    if user and user.codigo_verificacion == codigo:
+        user.verificado = 1
+        db.session.commit()
         return jsonify({"message": "Cuenta verificada correctamente"}), 200
     
-    conn.close()
     return jsonify({"message": "Código incorrecto"}), 400
 
 @app.route("/resend-code", methods=["POST"])
+@limiter.limit("3 per minute")
 def resend_code():
     data = request.json
     email = data.get("email")
     
-    conn = conectar_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    if not cursor.fetchone():
-        conn.close()
+    user = Usuario.query.filter_by(email=email).first()
+    if not user:
         return jsonify({"message": "Email no registrado"}), 400
         
     codigo = str(random.randint(100000, 999999))
-    cursor.execute("UPDATE usuarios SET codigo_verificacion=%s WHERE email=%s", (codigo, email))
-    conn.commit()
-    conn.close()
+    user.codigo_verificacion = codigo
+    db.session.commit()
     
     enviar_correo(email, "Nuevo código de verificación", f"<h1>Tu nuevo código es: {codigo}</h1>")
     return jsonify({"message": "Código reenviado"}), 200
 
 @app.route("/request-password-reset", methods=["POST"])
+@limiter.limit("3 per minute")
 def request_password_reset():
     data = request.json
     email = data.get("email")
@@ -258,31 +401,44 @@ def request_password_reset():
     return jsonify({"message": "Correo enviado con instrucciones."}), 200
 
 @app.route("/reset-password-with-token", methods=["POST"])
+@limiter.limit("10 per minute")
 def reset_password_with_token():
-    data = request.json
+    data = request.json or {}
     token = data.get("token")
-    new_password = data.get("password")
-    
+    new_password = data.get("password") or ""
+
+    if not token or not (
+        8 <= len(new_password) <= 16
+        and re.search("[a-z]", new_password)
+        and re.search("[A-Z]", new_password)
+        and re.search("[0-9]", new_password)
+        and re.search("[^a-zA-Z0-9]", new_password)
+    ):
+        return jsonify({"message": "Contraseña insegura"}), 400
+
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT email, reset_token_expires FROM usuarios WHERE reset_token = %s", (token,))
     row = cursor.fetchone()
-    
+
     if not row:
         conn.close()
         return jsonify({"message": "Token inválido"}), 400
-        
+
     email, expires_str = row
     if datetime.fromisoformat(expires_str) < datetime.now():
         conn.close()
         return jsonify({"message": "Token expirado"}), 400
-        
+
     hashed = generate_password_hash(new_password)
-    cursor.execute("UPDATE usuarios SET password=%s, reset_token=NULL, reset_token_expires=NULL WHERE email=%s", 
-                   (hashed, email))
+    cursor.execute(
+        "UPDATE usuarios SET password=%s, reset_token=NULL, reset_token_expires=NULL, "
+        "failed_login_attempts=0, locked_until=NULL WHERE email=%s",
+        (hashed, email)
+    )
     conn.commit()
     conn.close()
-    
+
     return jsonify({"message": "Contraseña actualizada correctamente"}), 200
 
 # =========================
@@ -299,18 +455,17 @@ def get_profile():
     if not email:
         return jsonify({"message": "Token requerido"}), 401
 
-    conn = conectar_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    user = Usuario.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({"message": "Usuario no encontrado"}), 404
 
-    cursor.execute("""
-        SELECT email, nombre, apellidos, edad, foto_perfil
-        FROM usuarios WHERE email = %s
-    """, (email,))
-
-    data = cursor.fetchone()
-    conn.close()
-
-    return jsonify(data), 200
+    return jsonify({
+        "email": user.email,
+        "nombre": user.nombre,
+        "apellidos": user.apellidos,
+        "edad": user.edad,
+        "foto_perfil": user.foto_perfil
+    }), 200
 
 @app.route("/update-profile", methods=["PUT"])
 @jwt_required()
@@ -319,29 +474,23 @@ def update_profile():
     data = request.json
     nombre = data.get("nombre")
     password = data.get("password")
-    
-    conn = conectar_db()
-    cursor = conn.cursor()
-    
+
+    user = Usuario.query.filter_by(email=email).first()
     if nombre:
-        cursor.execute("UPDATE usuarios SET nombre=%s WHERE email=%s", (nombre, email))
-    
+        user.nombre = nombre
     if password:
-        hashed = generate_password_hash(password)
-        cursor.execute("UPDATE usuarios SET password=%s WHERE email=%s", (hashed, email))
-        
-    conn.commit()
-    conn.close()
+        user.password = generate_password_hash(password)
+
+    db.session.commit()
     return jsonify({"message": "Perfil actualizado"}), 200
 
 @app.route("/delete-photo", methods=["DELETE"])
 @jwt_required()
 def delete_photo():
     email = get_jwt_identity()
-    conn = conectar_db()
-    conn.cursor().execute("UPDATE usuarios SET foto_perfil=NULL WHERE email=%s", (email,))
-    conn.commit()
-    conn.close()
+    user = Usuario.query.filter_by(email=email).first()
+    user.foto_perfil = None
+    db.session.commit()
     return jsonify({"message": "Foto eliminada"}), 200
 
 # =========================
@@ -352,19 +501,12 @@ def delete_photo():
 def balance():
     email = get_jwt_identity()
 
-    conn = conectar_db()
-    cursor = conn.cursor()
+    user = Usuario.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({"message": "Usuario no encontrado"}), 404
 
-    cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-    user_id = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM ingresos WHERE usuario_id = %s", (user_id,))
-    ingresos = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM gastos WHERE usuario_id = %s", (user_id,))
-    gastos = cursor.fetchone()[0]
-
-    conn.close()
+    ingresos = db.session.query(db.func.sum(Ingreso.monto)).filter(Ingreso.usuario_id == user.id).scalar() or 0
+    gastos = db.session.query(db.func.sum(Gasto.monto)).filter(Gasto.usuario_id == user.id).scalar() or 0
 
     return jsonify({
         "ingresos": ingresos,
@@ -377,6 +519,7 @@ def balance():
 # =========================
 @app.route("/update-photo", methods=["POST"])
 @jwt_required()
+@limiter.limit("10 per minute")
 def update_photo():
     email = get_jwt_identity()
     foto_base64 = request.json.get("foto")
@@ -416,6 +559,7 @@ def update_photo():
 # =========================
 @app.route("/run-bot", methods=["POST"])
 @jwt_required()
+@limiter.limit("20 per minute")
 def run_bot():
     return jsonify(obtener_frase_motivacional()), 200
 
@@ -431,7 +575,11 @@ def get_categories():
     
     # Obtener ID usuario
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     # Categorías globales (0) + del usuario
     cursor.execute("SELECT nombre FROM categorias WHERE usuario_id=0 OR usuario_id=%s", (user_id,))
@@ -449,7 +597,11 @@ def add_category():
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     try:
         cursor.execute("INSERT INTO categorias (usuario_id, nombre) VALUES (%s, %s)", (user_id, nombre))
@@ -509,7 +661,11 @@ def add_income():
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     cursor.execute("INSERT INTO ingresos (usuario_id, monto, fecha, categoria) VALUES (%s, %s, %s, %s)",
                    (user_id, data['monto'], data['fecha'], data.get('categoria', 'Ingreso')))
@@ -525,7 +681,11 @@ def add_expense():
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     recurrente = 1 if data.get('es_recurrente') else 0
     cursor.execute("INSERT INTO gastos (usuario_id, tipo, monto, fecha, es_recurrente) VALUES (%s, %s, %s, %s, %s)",
@@ -537,10 +697,21 @@ def add_expense():
 @app.route("/delete-income/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_income(id):
+    email = get_jwt_identity()
     conn = conectar_db()
-    conn.cursor().execute("DELETE FROM ingresos WHERE id=%s", (id,))
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
+    cursor.execute("DELETE FROM ingresos WHERE id=%s AND usuario_id=%s", (id, user_id))
     conn.commit()
+    deleted = cursor.rowcount
     conn.close()
+    if deleted == 0:
+        return jsonify({"message": "Ingreso no encontrado o no autorizado"}), 404
     return jsonify({"message": "Ingreso eliminado"}), 200
 
 @app.route("/delete-expense/<int:id>", methods=["DELETE"])
@@ -582,6 +753,15 @@ def payment_status():
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email=%s", (email,))
     user_row = cursor.fetchone()
+    if not user_row:
+        conn.close()
+        return jsonify({
+            "ingreso_base": 0,
+            "total_gastos_mes": 0,
+            "income_confirmed_this_month": False,
+            "pagos": [],
+            "message": "Usuario no encontrado"
+        }), 404
     user_id = user_row['id']
     ingreso_base = user_row['ingreso_mensual'] or 0
     
@@ -632,7 +812,11 @@ def add_recurring():
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     cursor.execute("INSERT INTO gastos_recurrentes (usuario_id, categoria, monto, dia_limite) VALUES (%s, %s, %s, %s)",
                    (user_id, data['categoria'], data['monto'], data['dia']))
@@ -689,6 +873,9 @@ def confirm_income():
     cursor = conn.cursor()
     cursor.execute("SELECT id, ingreso_mensual FROM usuarios WHERE email=%s", (email,))
     row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
     user_id = row[0]
     monto = row[1]
     
@@ -713,7 +900,10 @@ def update_base_income():
     cursor = conn.cursor()
     cursor.execute("UPDATE usuarios SET ingreso_mensual = %s WHERE email = %s", (new_income, email))
     conn.commit()
+    updated = cursor.rowcount
     conn.close()
+    if updated == 0:
+        return jsonify({"message": "Usuario no encontrado"}), 404
     
     return jsonify({"message": "Ingreso base actualizado correctamente"}), 200
 
@@ -727,7 +917,11 @@ def get_savings():
     conn = conectar_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()['id']
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify([]), 200
+    user_id = row['id']
     
     cursor.execute("SELECT id, nombre, monto_objetivo as objetivo, monto_actual as actual, fecha_limite as fecha, moneda FROM metas_ahorro WHERE usuario_id=%s", (user_id,))
     data = cursor.fetchall()
@@ -742,7 +936,11 @@ def add_saving():
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM usuarios WHERE email=%s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     cursor.execute("INSERT INTO metas_ahorro (usuario_id, nombre, monto_objetivo, fecha_limite, moneda) VALUES (%s, %s, %s, %s, %s)",
                    (user_id, data['nombre'], data['objetivo'], data['fecha'], data.get('moneda', 'COP')))
@@ -821,18 +1019,72 @@ def delete_saving(id):
 # =========================
 # CHAT
 # =========================
+def _calcular_saldo(cursor, user_id):
+    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM ingresos WHERE usuario_id = %s", (user_id,))
+    ingresos = cursor.fetchone()[0]
+    cursor.execute("SELECT COALESCE(SUM(monto),0) FROM gastos WHERE usuario_id = %s", (user_id,))
+    gastos = cursor.fetchone()[0]
+    return ingresos - gastos
+
+
+def _obtener_mayor_gasto(cursor, user_id):
+    cursor.execute(
+        "SELECT tipo, monto, fecha FROM gastos WHERE usuario_id=%s ORDER BY monto DESC LIMIT 1",
+        (user_id,),
+    )
+    return cursor.fetchone()
+
+
+def _obtener_ahorrado(cursor, user_id):
+    cursor.execute("SELECT COALESCE(SUM(monto_actual),0) FROM metas_ahorro WHERE usuario_id=%s", (user_id,))
+    return cursor.fetchone()[0]
+
+
+def _obtener_pagos_pendientes(cursor, user_id):
+    now = datetime.now()
+    date_filter = f"{now.year}-{str(now.month).zfill(2)}-%"
+
+    cursor.execute("SELECT categoria, dia_limite FROM gastos_recurrentes WHERE usuario_id=%s", (user_id,))
+    recurrentes = cursor.fetchall()
+
+    cursor.execute(
+        "SELECT tipo FROM gastos WHERE usuario_id=%s AND es_recurrente=1 AND fecha LIKE %s",
+        (user_id, date_filter),
+    )
+    pagados = [r[0] for r in cursor.fetchall()]
+
+    return [f"- {cat} (Día {dia})" for cat, dia in recurrentes if cat not in pagados]
+
+
+def _eliminar_ultimo_gasto(cursor, conn, user_id):
+    cursor.execute(
+        "SELECT id, tipo, monto FROM gastos WHERE usuario_id=%s ORDER BY id DESC LIMIT 1", (user_id,)
+    )
+    last_expense = cursor.fetchone()
+    if last_expense:
+        cursor.execute("DELETE FROM gastos WHERE id=%s", (last_expense[0],))
+        conn.commit()
+    return last_expense
+
+
+def _obtener_categorias_usuario(cursor, user_id):
+    cursor.execute("SELECT nombre FROM categorias WHERE usuario_id=0 OR usuario_id=%s", (user_id,))
+    return [r[0] for r in cursor.fetchall()]
+
+
 @app.route("/chat", methods=["POST"])
 @jwt_required()
+@limiter.limit("30 per minute")
 def chat():
-    msg = request.json.get("message", "").lower()
+    body = request.json or {}
+    msg = body.get("message", "")
+    msg_lower = msg.lower()
+    history = body.get("history", [])
     email = get_jwt_identity()
-    
-    response_text = "No entendí eso. Intenta 'Saldo', 'Mayor gasto' o 'Frase'."
-    options = []
-    
+
     conn = conectar_db()
     cursor = conn.cursor()
-    
+
     # Obtener ID de usuario
     cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
     row = cursor.fetchone()
@@ -841,70 +1093,103 @@ def chat():
         return jsonify({"response": "Usuario no encontrado", "options": []}), 200
     user_id = row[0]
 
-    if "saldo" in msg:
-        cursor.execute("SELECT COALESCE(SUM(monto),0) FROM ingresos WHERE usuario_id = %s", (user_id,))
-        ingresos = cursor.fetchone()[0]
-        cursor.execute("SELECT COALESCE(SUM(monto),0) FROM gastos WHERE usuario_id = %s", (user_id,))
-        gastos = cursor.fetchone()[0]
-        balance_val = ingresos - gastos
-        response_text = f"💰 Tu saldo actual es: ${balance_val:,.0f}"
-        
-    elif "mayor gasto" in msg:
-        cursor.execute("SELECT tipo, monto, fecha FROM gastos WHERE usuario_id=%s ORDER BY monto DESC LIMIT 1", (user_id,))
-        row = cursor.fetchone()
-        if row:
-            response_text = f"🏆 Tu mayor gasto fue en {row[0]} por ${row[1]:,.0f} el {row[2]}."
-        else:
-            response_text = "No tienes gastos registrados aún."
-            
-    elif "ahorrado" in msg:
-        cursor.execute("SELECT COALESCE(SUM(monto_actual),0) FROM metas_ahorro WHERE usuario_id=%s", (user_id,))
-        ahorro = cursor.fetchone()[0]
-        response_text = f"🐷 Tienes ahorrado un total de ${ahorro:,.0f} en tus metas."
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    response_text = None
+    pending_action = None
+    resultado = None
+    intent = None
 
-    elif "frase" in msg:
+    # Atajos del menú rápido: se resuelven sin pasar por el LLM (instantáneos)
+    if "saldo" in msg_lower:
+        intent = "query_balance"
+    elif "mayor gasto" in msg_lower:
+        intent = "query_biggest_expense"
+    elif "ahorrado" in msg_lower:
+        intent = "query_savings"
+    elif "frase" in msg_lower:
         bot_data = obtener_frase_motivacional()
         response_text = f"💡 {bot_data['dato_extraido']}"
+    elif "pagos" in msg_lower:
+        intent = "list_pending"
+    elif "elimina el último gasto" in msg_lower:
+        intent = "delete_last_expense"
 
-    elif "pagos" in msg:
-        now = datetime.now()
-        month = str(now.month).zfill(2)
-        year = str(now.year)
-        date_filter = f"{year}-{month}-%"
-        
-        cursor.execute("SELECT categoria, dia_limite FROM gastos_recurrentes WHERE usuario_id=%s", (user_id,))
-        recurrentes = cursor.fetchall()
-        
-        cursor.execute("SELECT tipo FROM gastos WHERE usuario_id=%s AND es_recurrente=1 AND fecha LIKE %s", (user_id, date_filter))
-        pagados = [r[0] for r in cursor.fetchall()]
-        
-        pendientes = []
-        for cat, dia in recurrentes:
-            if cat not in pagados:
-                pendientes.append(f"- {cat} (Día {dia})")
-        
-        if pendientes:
-            response_text = "📅 Pagos pendientes este mes:\n" + "\n".join(pendientes)
-        else:
-            response_text = "✅ ¡Estás al día con tus pagos recurrentes!"
+    # Texto libre: se interpreta con el asistente LLM (Ollama)
+    if response_text is None and intent is None:
+        categorias_usuario = _obtener_categorias_usuario(cursor, user_id)
+        llm_history = list(history) + [{"role": "user", "text": msg}]
+        resultado = llm_assistant.interpretar_mensaje(llm_history, categorias_usuario, hoy)
+        intent = resultado["intent"]
 
-    elif "elimina el último gasto" in msg:
-        cursor.execute("SELECT id, tipo, monto FROM gastos WHERE usuario_id=%s ORDER BY id DESC LIMIT 1", (user_id,))
-        last_expense = cursor.fetchone()
-        if last_expense:
-            eid, etipo, emonto = last_expense
-            cursor.execute("DELETE FROM gastos WHERE id=%s", (eid,))
-            conn.commit()
-            response_text = f"🗑️ Eliminado último gasto: {etipo} por ${emonto:,.0f}"
-        else:
-            response_text = "No hay gastos para eliminar."
+    if response_text is not None:
+        pass  # ya resuelto arriba (frase motivacional)
+
+    elif intent == "query_balance":
+        response_text = f"💰 Tu saldo actual es: ${_calcular_saldo(cursor, user_id):,.0f}"
+
+    elif intent == "query_biggest_expense":
+        row = _obtener_mayor_gasto(cursor, user_id)
+        response_text = (
+            f"🏆 Tu mayor gasto fue en {row[0]} por ${row[1]:,.0f} el {row[2]}."
+            if row else "No tienes gastos registrados aún."
+        )
+
+    elif intent == "query_savings":
+        response_text = f"🐷 Tienes ahorrado un total de ${_obtener_ahorrado(cursor, user_id):,.0f} en tus metas."
+
+    elif intent == "list_pending":
+        pendientes = _obtener_pagos_pendientes(cursor, user_id)
+        response_text = (
+            "📅 Pagos pendientes este mes:\n" + "\n".join(pendientes)
+            if pendientes else "✅ ¡Estás al día con tus pagos recurrentes!"
+        )
+
+    elif intent == "delete_last_expense":
+        last_expense = _eliminar_ultimo_gasto(cursor, conn, user_id)
+        response_text = (
+            f"🗑️ Eliminado último gasto: {last_expense[1]} por ${last_expense[2]:,.0f}"
+            if last_expense else "No hay gastos para eliminar."
+        )
+
+    elif intent in ("add_expense", "add_income") and resultado and resultado["monto"]:
+        monto = float(resultado["monto"])
+        categoria = resultado["categoria"] or ("Otros" if intent == "add_expense" else "Ingreso")
+        fecha = resultado["fecha"] or hoy
+        pending_action = {
+            "type": intent,
+            "monto": monto,
+            "categoria": categoria,
+            "fecha": fecha,
+            "es_recurrente": resultado["es_recurrente"],
+        }
+        palabra = "gasto" if intent == "add_expense" else "ingreso"
+        response_text = f"¿Confirmas que quieres registrar este {palabra}? ${monto:,.0f} en {categoria} el {fecha}."
+
+    elif intent in ("add_expense", "add_income"):
+        response_text = (resultado["reply"] if resultado else "") or "¿Cuánto fue el monto?"
+
+    elif intent == "error":
+        response_text = (resultado["reply"] if resultado else "") or (
+            "El asistente inteligente no está disponible ahora mismo. "
+            "Puedes usar el menú rápido o el formulario para registrar tu gasto."
+        )
+
+    else:
+        response_text = (resultado["reply"] if resultado else "") or (
+            "No entendí eso. Intenta 'Saldo', 'Mayor gasto', o cuéntame tu gasto, "
+            "ej: 'gasté 20000 en transporte hoy'."
+        )
 
     conn.close()
-        
-    return jsonify({"response": response_text, "options": options}), 200
+
+    payload = {"response": response_text, "options": []}
+    if pending_action:
+        payload["pending_action"] = pending_action
+    return jsonify(payload), 200
 
 @app.route("/export-pdf", methods=["GET"])
 @jwt_required()
+@limiter.limit("10 per minute")
 def export_pdf():
     email = get_jwt_identity()
     month = request.args.get("month")
@@ -916,8 +1201,12 @@ def export_pdf():
     # Get user info
     cursor.execute("SELECT id, nombre, apellidos FROM usuarios WHERE email=%s", (email,))
     user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
     user_id = user["id"]
-    name = f"{user['nombre']} {user['apellidos']}"
+    name_parts = [user.get("nombre") or "", user.get("apellidos") or ""]
+    name = " ".join(part for part in name_parts if part).strip() or email
     
     # Build query
     query = """
@@ -1086,7 +1375,11 @@ def save_onboarding():
     
     # Obtener ID para insertar gastos
     cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-    user_id = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"message": "Usuario no encontrado"}), 404
+    user_id = row[0]
     
     # Insertar gastos recurrentes
     for g in gastos:

@@ -9,12 +9,108 @@ const API = window.API_URL || "https://api.fincsdash.online";
 let currentUser = null;
 let currentMovements = []; // Para guardar los datos y poder ordenarlos
 let sortAsc = true;        // Para alternar entre ascendente y descendente
+let currentSortColumn = null; // Columna activa de ordenamiento en Historial
 let myChart = null;        // Variable global para el gráfico
 let recurringExpensesTemp = []; // Para guardar temporalmente los gastos del onboarding
 let currentChartType = 'Gasto'; // Tipo de gráfico actual (Gasto por defecto)
 let currentBaseIncome = 0;      // Para guardar el ingreso base y poder editarlo
 let rotationInterval = null;    // Variable para controlar la rotación automática
 let currentAutoWallpaperObj = null; // Para recordar cuál es el fondo automático actual (para resize)
+let dashboardReconnectTimer = null;
+let searchFilterActive = false; // Si hay un filtro de búsqueda aplicado en Historial
+
+/* ======================
+   SESIÓN (Recordarme)
+====================== */
+// Si "Recordarme" está marcado, el token vive en localStorage (persiste
+// entre cierres del navegador). Si no, vive en sessionStorage (se borra
+// al cerrar la pestaña/navegador).
+function getToken() {
+    return localStorage.getItem("token") || sessionStorage.getItem("token");
+}
+
+function setToken(token, remember) {
+    if (remember) {
+        localStorage.setItem("token", token);
+        sessionStorage.removeItem("token");
+    } else {
+        sessionStorage.setItem("token", token);
+        localStorage.removeItem("token");
+    }
+}
+
+function clearToken() {
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRecoverableStatus(status) {
+    return [0, 408, 429, 500, 502, 503, 504].includes(status);
+}
+
+async function apiFetchJson(url, options = {}, retries = 2) {
+    const retryDelays = [700, 1600, 3200];
+    let lastError;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            const contentType = response.headers.get("content-type") || "";
+            const payload = contentType.includes("application/json")
+                ? await response.json()
+                : {
+                    message: response.ok
+                        ? await response.text()
+                        : "Servidor temporalmente no disponible. Reintentando conexión."
+                };
+
+            if (!response.ok) {
+                const error = new Error(payload.message || `Error ${response.status}`);
+                error.status = response.status;
+                error.recoverable = isRecoverableStatus(response.status);
+                throw error;
+            }
+
+            return payload;
+        } catch (error) {
+            lastError = error;
+            const isNetworkError = error instanceof TypeError;
+            const canRetry = attempt < retries && (isNetworkError || error.recoverable);
+
+            if (!canRetry) break;
+            await delay(retryDelays[Math.min(attempt, retryDelays.length - 1)]);
+        }
+    }
+
+    if (!lastError.status && lastError instanceof TypeError) {
+        lastError.message = "Servidor en reconexión. Conservaremos tu sesión y reintentaremos.";
+        lastError.recoverable = true;
+    }
+
+    throw lastError;
+}
+
+function isAuthExpired(error) {
+    return error && (error.status === 401 || error.status === 422);
+}
+
+function retryDashboardLoad(email, error) {
+    if (dashboardReconnectTimer) return;
+
+    const message = error && error.message
+        ? error.message
+        : "Servidor en reconexión. Reintentando...";
+
+    showToast(message, "info");
+    dashboardReconnectTimer = setTimeout(() => {
+        dashboardReconnectTimer = null;
+        showDashboard(email);
+    }, 3500);
+}
 
 // LISTA DE FONDOS DISPONIBLES
 // Modificamos la estructura para tener ID y dos URLs (Desktop y Mobile)
@@ -105,226 +201,369 @@ document.addEventListener("DOMContentLoaded", () => {
     if (dashboard) {
         // Reemplaza el contenido HTML interno con todo el diseño del panel de control
         dashboard.innerHTML = `
-            <div class="dashboard-container">
-                <!-- Encabezado -->
-                <div class="header-bar">
-                    <div class="header-left" style="display: flex; align-items: center; gap: 15px;">
-                         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-                         <img src="./logo.png" alt="FinCSDash" style="height: 50px; width: auto;">
+            <!-- SideNavBar - Solid Primary Background -->
+            <aside id="dashboardSidebar" class="h-screen w-64 fixed left-0 top-0 bg-primary-container border-r border-outline-variant shadow-lg flex flex-col py-md px-sm z-50">
+                <div id="dashboardMenuLogo" class="dashboard-menu-logo mb-lg px-xs" onclick="toggleDashboardMenu(event)" onkeydown="if(event.key === 'Enter' || event.key === ' ') toggleDashboardMenu(event)" role="button" tabindex="0" aria-label="Mostrar menú de funciones">
+                    <img src="logo.png" alt="FinCSDash">
+                    <div class="dashboard-brand-copy">
+                        <h1 class="font-headline-md text-headline-md font-bold text-on-primary">FinCSDash</h1>
+                        <p class="font-body-md text-body-md text-on-primary-container">Wealth Management</p>
+                    </div>
+                </div>
+                <nav class="flex-1 space-y-1">
+                    <a id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="nav-item flex items-center gap-sm px-xs py-sm rounded-lg text-on-primary-container hover:bg-white/10 transition-colors duration-200 cursor-pointer">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="font-body-md text-body-md">Resumen</span>
+                    </a>
+                    <a id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="nav-item flex items-center gap-sm px-xs py-sm rounded-lg text-on-primary-container hover:bg-white/10 transition-colors duration-200 cursor-pointer">
+                        <span class="material-symbols-outlined">calendar_month</span>
+                        <span class="font-body-md text-body-md">Pagos</span>
+                    </a>
+                    <a id="nav-btn-history" onclick="showDashboardView('history-view')" class="nav-item flex items-center gap-sm px-xs py-sm rounded-lg text-on-primary-container hover:bg-white/10 transition-colors duration-200 cursor-pointer">
+                        <span class="material-symbols-outlined">receipt_long</span>
+                        <span class="font-body-md text-body-md">Historial</span>
+                    </a>
+                    <a id="nav-btn-savings" onclick="showDashboardView('savings-view')" class="nav-item flex items-center gap-sm px-xs py-sm rounded-lg text-on-primary-container hover:bg-white/10 transition-colors duration-200 cursor-pointer">
+                        <span class="material-symbols-outlined">savings</span>
+                        <span class="font-body-md text-body-md">Ahorros</span>
+                    </a>
+                    <a id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="nav-item flex items-center gap-sm px-xs py-sm rounded-lg text-on-primary-container hover:bg-white/10 transition-colors duration-200 cursor-pointer">
+                        <span class="material-symbols-outlined">trending_up</span>
+                        <span class="font-body-md text-body-md">Análisis</span>
+                    </a>
+                </nav>
+                <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="nav-item mt-auto mx-xs bg-secondary-container text-on-secondary-container font-label-md text-label-md py-sm px-md rounded-full hover:opacity-90 transition-all flex items-center justify-center gap-xs shadow-md">
+                    <span class="material-symbols-outlined">add</span>
+                    Registrar Pago
+                </button>
+            </aside>
+
+            <!-- TopNavBar - Elevated Solid Background -->
+            <header class="fixed top-0 right-0 left-64 h-16 bg-white shadow-md flex justify-between items-center px-lg z-40 border-b border-outline-variant">
+                <div class="flex items-center bg-surface-container rounded-full px-md py-xs w-96 border border-outline-variant">
+                    <span onclick="searchExpenses()" class="material-symbols-outlined text-on-surface-variant mr-xs cursor-pointer">search</span>
+                    <input id="globalSearchInput" onkeydown="if(event.key==='Enter'){event.preventDefault();searchExpenses();}" class="bg-transparent border-none focus:ring-0 text-label-md font-label-md w-full" placeholder="Buscar gastos por categoría..." type="text"/>
+                </div>
+                <div class="flex items-center gap-md">
+                    <!-- Balance Permanente (Mini Label) -->
+                    <div id="miniBalanceContainer" style="margin-right: 15px; text-align: right; display: none;">
+                        <small style="display: block; font-size: 0.7rem; opacity: 0.7; line-height: 1.2;">Saldo Actual</small>
+                        <span id="miniBalanceAmount" style="font-weight: 700; font-size: 1rem;">--</span>
                     </div>
 
-                    <div class="header-right">
-                        <!-- Balance Permanente (Mini Label) -->
-                        <div id="miniBalanceContainer" style="margin-right: 15px; text-align: right; display: none;">
-                            <small style="display: block; font-size: 0.7rem; opacity: 0.7; line-height: 1.2;">Saldo Actual</small>
-                            <span id="miniBalanceAmount" style="font-weight: 700; font-size: 1rem;">--</span>
+                    <div class="relative" style="position: relative;">
+                        <button id="alertsBtn" onclick="toggleAlertsMenu(event)" class="hover:bg-surface-container rounded-full p-2 transition-transform scale-95 relative">
+                            <span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+                            <span id="alertsBadge" class="alerts-badge" style="display:none;">0</span>
+                        </button>
+                        <div id="alertsDropdown" class="profile-dropdown" style="width: 320px; right: 0;">
+                            <div class="dropdown-header">Pagos vencidos</div>
+                            <div id="alertsList" class="dropdown-body" style="max-height: 280px; overflow-y: auto;"></div>
                         </div>
-
-                        <!-- PERFIL DE USUARIO -->
-                        <div class="profile-container">
-                            <div class="profile-avatar" onclick="toggleProfileMenu()" id="profileAvatar" style="cursor: pointer;">
+                    </div>
+                    <div class="flex items-center gap-xs ml-sm border-l border-outline-variant pl-md relative">
+                        <div class="flex items-center gap-xs cursor-pointer" onclick="toggleProfileMenu()" id="profileAvatar">
+                            <div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant flex items-center justify-center font-bold text-primary">
                                 <span id="avatarInitial">U</span>
-                                <img id="avatarImage" src="" alt="Perfil" style="display:none;">
+                                <img id="avatarImage" src="" alt="Perfil" style="display:none;" class="w-full h-full object-cover">
                             </div>
-                            <div class="profile-dropdown" id="profileDropdown">
-                                <div class="dropdown-header">
-                                    <strong id="dropdownEmail">usuario@email.com</strong>
-                                </div>
-                                <div class="dropdown-body">
-                                    <button onclick="openEditProfileModal()" class="dropdown-item">👤 Editar Perfil</button>
-                                    <button onclick="openWallpaperModal()" class="dropdown-item">🎨 Cambiar Fondo</button>
-                                    <label for="profilePhotoInput" class="dropdown-item">📷 Cambiar Foto</label>
-                                    <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
-                                    <button id="btnRemovePhoto" class="dropdown-item" onclick="removeProfilePhoto()" style="display:none; color: var(--danger);">🗑️ Eliminar Foto</button>
-                                    
-                                    <div class="dropdown-divider"></div>
-                                    
-                                    <button onclick="toggleDarkMode()" class="dropdown-item">🌙 Modo Oscuro</button>
-                                    <button onclick="logout()" class="dropdown-item" style="color: var(--danger);">🚪 Cerrar Sesión</button>
-                                </div>
+                            <span class="font-label-md text-label-md text-primary font-bold" id="dropdownEmail">usuario@email.com</span>
+                        </div>
+                        
+                        <!-- Dropdown Menu -->
+                        <div class="profile-dropdown absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-outline-variant py-xs z-50" id="profileDropdown">
+                            <div class="py-xs dropdown-body">
+                                <button onclick="openEditProfileModal()" class="dropdown-item w-full text-left px-md py-sm text-sm text-on-surface hover:bg-surface-container transition-colors flex items-center gap-xs">👤 Editar Perfil</button>
+                                <label for="profilePhotoInput" class="dropdown-item w-full text-left px-md py-sm text-sm text-on-surface hover:bg-surface-container transition-colors flex items-center gap-xs cursor-pointer">📷 Cambiar Foto</label>
+                                <input type="file" id="profilePhotoInput" hidden accept="image/*" onchange="uploadProfilePhoto()">
+                                <button id="btnRemovePhoto" class="dropdown-item w-full text-left px-md py-sm text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-xs" onclick="removeProfilePhoto()" style="display:none;">🗑️ Eliminar Foto</button>
+                                
+                                <div class="dropdown-divider border-t border-outline-variant my-xs"></div>
+                                
+                                <button id="darkModeToggleBtn" onclick="toggleDarkMode()" class="dropdown-item w-full text-left px-md py-sm text-sm text-on-surface hover:bg-surface-container transition-colors flex items-center gap-xs">🌙 Modo Oscuro</button>
+                                <button onclick="logout()" class="dropdown-item w-full text-left px-md py-sm text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-xs font-bold">🚪 Cerrar Sesión</button>
                             </div>
                         </div>
                     </div>
                 </div>
+            </header>
 
-                <div class="grid-dashboard">
-                    <!-- Columna de Navegación -->
-                    <div class="nav-column">
-                        <div class="card">
-                            <h4 style="text-align: center; text-transform: uppercase;">Navegación</h4>
-                            <div class="nav-buttons">
-                                <button id="nav-btn-payments" onclick="showDashboardView('payments-view')" class="btn btn-secondary w-100">Estado Pagos</button>
-                                <button id="nav-btn-summary" onclick="showDashboardView('summary-view')" class="btn btn-secondary w-100">Resumen</button>
-                                <button id="nav-btn-analysis" onclick="showDashboardView('analysis-view')" class="btn btn-secondary w-100">Análisis</button>
-                                <button id="nav-btn-register" onclick="showDashboardView('register-movement-view')" class="btn btn-secondary w-100">Registrar</button>
-                                <button id="nav-btn-savings" onclick="showDashboardView('savings-view')" class="btn btn-secondary w-100">Metas Ahorro</button>
-                                <button id="nav-btn-history" onclick="showDashboardView('history-view')" class="btn btn-secondary w-100">Historial</button>
+            <!-- Main Content Canvas -->
+            <div class="ml-64 mt-16 p-lg">
+                <div class="max-w-container-max mx-auto space-y-lg">
+                    
+                    <!-- VISTA ESTADO DE PAGOS -->
+                    <div id="payments-view" class="dashboard-view space-y-lg" style="display: none;">
+                        <div class="flex justify-between items-end bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div>
+                                <h2 class="font-headline-lg text-headline-lg text-primary">Estado de Pagos Mensuales</h2>
+                                <p class="font-body-lg text-body-lg text-on-surface-variant">Administra tus obligaciones recurrentes y realiza el seguimiento de vencimientos.</p>
+                            </div>
+                            <div class="flex gap-sm">
+                                <div class="flex items-center gap-xs">
+                                    <input type="month" id="paymentsMonthFilter" onchange="loadPaymentStatus()" class="bg-white border border-outline-variant rounded-lg font-label-sm text-label-sm focus:ring-primary px-sm py-xs">
+                                </div>
                             </div>
                         </div>
 
-                        <!-- SECCIÓN AUTOMATIZACIÓN COMENTADA TEMPORALMENTE
-                        <div class="card" style="display: none;">
-                            <h4>Automatización</h4>
-                            <div class="nav-buttons">
-                                <button onclick="runBot()" class="btn btn-secondary w-100">🤖 Ejecutar Bot</button>
+                        <div class="bg-white p-md rounded-xl border border-outline-variant shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-md">
+                            <div>
+                                <span class="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider">Ingreso Mensual Base</span>
+                                <div class="flex items-center gap-sm mt-xs">
+                                    <h3 id="baseIncomeDisplay" class="font-headline-lg text-headline-lg text-secondary font-bold">--</h3>
+                                    <button onclick="openEditBaseIncomeModal()" class="hover:bg-surface-container rounded-full p-1.5 transition-colors flex items-center justify-center text-on-surface-variant" title="Editar Ingreso Base">
+                                        <span class="material-symbols-outlined text-sm">edit</span>
+                                    </button>
+                                </div>
+                                <div id="incomeStatusContainer" class="mt-xs"></div>
+                            </div>
+                            <div class="flex gap-md bg-surface-container-low p-sm rounded-lg border border-outline-variant">
+                                <div class="flex items-center gap-xs">
+                                    <span class="w-3 h-3 rounded-full bg-secondary"></span>
+                                    <span class="font-label-sm text-label-sm text-primary">Pagado</span>
+                                </div>
+                                <div class="flex items-center gap-xs">
+                                    <span class="w-3 h-3 rounded-full bg-primary-container"></span>
+                                    <span class="font-label-sm text-label-sm text-primary">Pendiente</span>
+                                </div>
+                                <div class="flex items-center gap-xs">
+                                    <span class="w-3 h-3 rounded-full bg-error"></span>
+                                    <span class="font-label-sm text-label-sm text-primary">Vencido</span>
+                                </div>
                             </div>
                         </div>
-                        -->
+
+                        <div class="bg-white rounded-xl overflow-hidden shadow-sm border border-outline-variant">
+                            <div class="p-md border-b border-outline-variant bg-surface-container-low">
+                                <h4 class="font-headline-md text-headline-md text-primary">Lista de Pagos</h4>
+                            </div>
+                            <div id="paymentsListContainer" class="p-md space-y-sm"></div>
+                        </div>
                     </div>
 
-                    <!-- Columna de Contenido -->
-                    <div class="content-column">
-                        <!-- VISTA REGISTRAR MOVIMIENTO -->
-                        <div id="register-movement-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <h4>📝 Registrar Movimiento</h4>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Categoría</label>
-                                    <select id="categoriaSelect" class="form-control"></select>
-                                </div>
+                    <!-- VISTA RESUMEN -->
+                    <div id="summary-view" class="dashboard-view space-y-lg" style="display: none;">
+                        <div class="flex justify-between items-end bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div>
+                                <h2 class="font-headline-lg text-headline-lg text-primary">Resumen Financiero</h2>
+                                <p class="font-body-lg text-body-lg text-on-surface-variant">Revisa tu balance general, filtra periodos y exporta tus datos.</p>
+                            </div>
+                        </div>
 
-                                <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                                    <div>
-                                        <label class="form-label">Monto ($)</label>
-                                        <input type="number" id="expenseAmount" placeholder="0.00" class="form-control">
+                        <div class="grid grid-cols-12 gap-md">
+                            <div class="col-span-12 md:col-span-6 bg-secondary text-on-secondary p-md rounded-xl flex flex-col justify-between overflow-hidden shadow-lg min-h-[200px]">
+                                <div>
+                                    <p class="font-label-md text-label-md text-secondary-fixed-dim opacity-90 mb-xs">Balance del Periodo Seleccionado</p>
+                                    <h3 id="filteredBalanceDisplay" class="font-display text-display text-white font-bold">$0.00</h3>
+                                </div>
+                                <div class="flex items-center gap-xs text-secondary-fixed mt-sm">
+                                    <span class="material-symbols-outlined">account_balance_wallet</span>
+                                    <span class="font-numeric-data text-numeric-data">Estado de cuenta actualizado</span>
+                                </div>
+                            </div>
+
+                            <div class="col-span-12 md:col-span-6 bg-white p-md rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <h4 class="font-headline-md text-headline-md text-primary mb-sm">Filtrar Periodo</h4>
+                                    <p class="font-body-md text-body-md text-on-surface-variant mb-md">Selecciona el mes y año para filtrar tus movimientos en el resumen y análisis.</p>
+                                </div>
+                                <div class="mt-auto">
+                                    <input type="month" id="monthFilter" onchange="filterMovements()" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md focus:ring-primary px-md py-sm">
+                                </div>
+                            </div>
+
+                            <div class="col-span-12 bg-white p-md rounded-xl border border-outline-variant shadow-sm">
+                                <h4 class="font-headline-md text-headline-md text-primary mb-sm">Exportar Reportes</h4>
+                                <p class="font-body-md text-body-md text-on-surface-variant mb-md">Descarga el historial completo de transacciones en formato estructurado o documento PDF listo para imprimir.</p>
+                                <div class="flex flex-col sm:flex-row gap-sm">
+                                    <button onclick="exportToCSV()" class="flex-1 bg-white border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md flex items-center justify-center gap-xs hover:bg-surface-container transition-colors shadow-sm font-bold">
+                                        <span class="material-symbols-outlined">download</span>
+                                        Descargar CSV
+                                    </button>
+                                    <button onclick="exportToPDF()" class="flex-1 bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md flex items-center justify-center gap-xs hover:opacity-90 transition-colors shadow-sm font-bold">
+                                        <span class="material-symbols-outlined">picture_as_pdf</span>
+                                        Descargar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISTA ANÁLISIS -->
+                    <div id="analysis-view" class="dashboard-view space-y-lg" style="display: none;">
+                        <div class="flex justify-between items-end bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div>
+                                <h2 class="font-headline-lg text-headline-lg text-primary">Análisis Financiero</h2>
+                                <p class="font-body-lg text-body-lg text-on-surface-variant">Analiza la distribución de tus ingresos y gastos de manera visual.</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-md rounded-xl shadow-sm border border-outline-variant">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-md border-b border-outline-variant pb-md mb-md">
+                                <div>
+                                    <h4 class="font-headline-md text-headline-md text-primary">Distribución de <span id="chartTitleType">Gastos</span></h4>
+                                    <p class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">Haz clic en una sección del gráfico para filtrar transacciones.</p>
+                                </div>
+                                <div class="flex items-center gap-sm">
+                                    <button id="clearChartFilterBtn" onclick="filterTableByCategory(null)" class="border border-outline-variant text-primary px-sm py-1.5 rounded-lg font-label-sm text-label-sm hover:bg-surface-container transition-colors bg-white hidden">
+                                        Limpiar Filtro
+                                    </button>
+                                    <div class="flex bg-surface-container-low p-xs rounded-lg border border-outline-variant gap-xs">
+                                        <button id="btnChartExpense" onclick="switchChartType('Gasto')" class="btn btn-primary btn-sm">Gastos</button>
+                                        <button id="btnChartIncome" onclick="switchChartType('Ingreso')" class="btn btn-secondary btn-sm">Ingresos</button>
                                     </div>
-                                    <div>
-                                        <label class="form-label">Fecha</label>
-                                        <input type="date" id="expenseDate" class="form-control">
-                                    </div>
                                 </div>
+                            </div>
+                            <div class="relative w-full" style="height: 380px;">
+                                <canvas id="expenseChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
 
-                                <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <input type="checkbox" id="isRecurringInput" style="width: 18px; height: 18px; cursor: pointer;">
-                                    <label for="isRecurringInput" style="margin: 0; cursor: pointer; font-size: 0.9rem;">🔁 Marcar como pago mensual recurrente</label>
+                    <!-- VISTA REGISTRAR MOVIMIENTO -->
+                    <div id="register-movement-view" class="dashboard-view max-w-md mx-auto space-y-lg" style="display: none;">
+                        <div class="bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm text-center">
+                            <h2 class="font-headline-lg text-headline-lg text-primary">📝 Registrar Movimiento</h2>
+                            <p class="font-body-md text-body-md text-on-surface-variant mt-1">Registra un nuevo ingreso o gasto para mantener tus finanzas al día.</p>
+                        </div>
+
+                        <div class="bg-white p-md rounded-xl shadow-sm border border-outline-variant space-y-md">
+                            <div>
+                                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Categoría</label>
+                                <select id="categoriaSelect" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm"></select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-md">
+                                <div>
+                                    <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Monto ($)</label>
+                                    <input type="number" id="expenseAmount" placeholder="0.00" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
                                 </div>
-
-                                <div class="flex-gap" style="margin-bottom: 25px;">
-                                    <button onclick="addIncome()" class="btn btn-success w-100">＋ Ingreso</button>
-                                    <button onclick="addExpense()" class="btn btn-danger w-100">－ Gasto</button>
+                                <div>
+                                    <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Fecha</label>
+                                    <input type="date" id="expenseDate" class="w-full bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
                                 </div>
+                            </div>
 
-                                <div style="border-top: 1px solid #eee; padding-top: 20px;">
-                                    <label class="form-label">Nueva Categoría</label>
-                                    <div class="flex-gap">
-                                        <input type="text" id="newCategoryInput" placeholder="Nombre..." class="form-control">
-                                        <button onclick="addCategory()" class="btn btn-secondary">Crear</button>
-                                    </div>
+                            <div class="p-sm bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-sm">
+                                <input type="checkbox" id="isRecurringInput" class="w-5 h-5 cursor-pointer text-primary border-outline-variant rounded focus:ring-primary">
+                                <label for="isRecurringInput" class="cursor-pointer font-label-sm text-label-sm text-on-surface-variant">🔁 Marcar como pago mensual recurrente</label>
+                            </div>
+
+                            <div class="flex gap-sm">
+                                <button onclick="addIncome()" class="flex-1 bg-secondary text-on-secondary px-md py-sm rounded-lg font-label-md text-label-md flex items-center justify-center gap-xs hover:opacity-90 transition-colors shadow-sm font-bold">
+                                    ＋ Ingreso
+                                </button>
+                                <button onclick="addExpense()" class="flex-1 bg-error text-on-error px-md py-sm rounded-lg font-label-md text-label-md flex items-center justify-center gap-xs hover:opacity-90 transition-colors shadow-sm font-bold">
+                                    － Gasto
+                                </button>
+                            </div>
+
+                            <div class="border-t border-outline-variant pt-md mt-md">
+                                <label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Nueva Categoría</label>
+                                <div class="flex gap-sm">
+                                    <input type="text" id="newCategoryInput" placeholder="Nombre de categoría..." class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-primary px-md py-sm">
+                                    <button onclick="addCategory()" class="border border-primary text-primary px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors bg-white font-bold">
+                                        Crear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISTA METAS DE AHORRO -->
+                    <div id="savings-view" class="dashboard-view space-y-lg" style="display: none;">
+                        <div class="flex justify-between items-end bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div>
+                                <h2 class="font-headline-lg text-headline-lg text-primary">🎯 Metas de Ahorro</h2>
+                                <p class="font-body-lg text-body-lg text-on-surface-variant">Establece objetivos de ahorro y sigue tu progreso mensual.</p>
+                            </div>
+                            <div>
+                                <button onclick="openAddSavingsModal()" class="bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md flex items-center gap-xs hover:opacity-90 transition-colors shadow-sm font-bold">
+                                    <span class="material-symbols-outlined">add</span>
+                                    Nueva Meta
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="dollar-price-container" class="bg-primary-container text-on-primary p-md rounded-xl border border-primary shadow-sm" style="display: none;">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <small class="text-on-primary-container font-label-sm text-label-sm block uppercase tracking-wider">Precio del Dólar (TRM Aprox.)</small>
+                                    <h3 id="dollar-price-display" class="font-headline-lg text-headline-lg text-white font-bold mt-xs">--</h3>
+                                </div>
+                                <button id="btn-fetch-dollar" onclick="fetchDollarPrice()" class="bg-secondary-container text-on-secondary-container font-label-md text-label-md py-sm px-md rounded-lg hover:opacity-90 transition-colors flex items-center gap-xs shadow-md font-bold">
+                                    <span class="material-symbols-outlined">refresh</span>
+                                    Actualizar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="savingsListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-md"></div>
+                    </div>
+
+                    <!-- VISTA HISTORIAL -->
+                    <div id="history-view" class="dashboard-view space-y-lg" style="display: none;">
+                        <div class="flex justify-between items-end bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div>
+                                <h2 class="font-headline-lg text-headline-lg text-primary">Historial de Movimientos</h2>
+                                <p class="font-body-lg text-body-lg text-on-surface-variant">Consulta y administra todas tus transacciones financieras.</p>
+                            </div>
+                            <div class="flex gap-sm">
+                                <div class="flex items-center gap-xs bg-white border border-outline-variant px-sm py-1.5 rounded-lg shadow-sm">
+                                    <input type="checkbox" id="filterRecurringHistory" onchange="renderMovements(currentMovements)" class="w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary cursor-pointer">
+                                    <label for="filterRecurringHistory" class="font-label-sm text-label-sm text-on-surface-variant cursor-pointer ml-1 select-none">Solo recurrentes</label>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- VISTA RESUMEN -->
-                        <div id="summary-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <h4>📊 Resumen Financiero</h4>
-                                <div style="text-align: center; padding: 20px 0;">
-                                    <h2 id="filteredBalanceDisplay" class="balance-title">$0.00</h2>
-                                    <p class="text-muted">Balance del periodo seleccionado</p>
+                        <!-- FILTROS DE HISTORIAL -->
+                        <div class="bg-white p-md rounded-xl border border-outline-variant shadow-sm">
+                            <div class="flex flex-wrap items-end gap-sm">
+                                <div>
+                                    <label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Desde</label>
+                                    <input type="date" id="historyDateFrom" onchange="renderMovements(currentMovements)" class="bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md px-sm py-1.5">
                                 </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Filtrar por Mes</label>
-                                    <input type="month" id="monthFilter" onchange="filterMovements()" class="form-control">
+                                <div>
+                                    <label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Hasta</label>
+                                    <input type="date" id="historyDateTo" onchange="renderMovements(currentMovements)" class="bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md px-sm py-1.5">
                                 </div>
-                                
-                                <div class="flex-gap" style="margin-top: 20px;">
-                                    <button onclick="exportToCSV()" class="btn btn-secondary w-100">📄 CSV</button>
-                                    <button onclick="exportToPDF()" class="btn btn-secondary w-100">📑 PDF</button>
+                                <div>
+                                    <label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Categoría</label>
+                                    <select id="historyCategoryFilter" onchange="renderMovements(currentMovements)" class="bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md px-sm py-1.5">
+                                        <option value="">Todas</option>
+                                    </select>
                                 </div>
+                                <div>
+                                    <label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Monto mín.</label>
+                                    <input type="number" id="historyAmountMin" placeholder="0" onchange="renderMovements(currentMovements)" class="bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md px-sm py-1.5 w-28">
+                                </div>
+                                <div>
+                                    <label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Monto máx.</label>
+                                    <input type="number" id="historyAmountMax" placeholder="∞" onchange="renderMovements(currentMovements)" class="bg-surface-container-low border border-outline-variant rounded-lg font-label-md text-label-md px-sm py-1.5 w-28">
+                                </div>
+                                <button onclick="clearHistoryFilters()" class="border border-outline-variant text-on-surface-variant px-md py-1.5 rounded-lg font-label-sm text-label-sm hover:bg-surface-container transition-colors bg-white">
+                                    Limpiar filtros
+                                </button>
                             </div>
                         </div>
 
-                        <!-- VISTA ANÁLISIS -->
-                        <div id="analysis-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <h4>📈 Análisis Financiero</h4>
-                                <div class="flex-gap" style="justify-content: center; margin-bottom: 15px;">
-                                    <button id="btnChartExpense" onclick="switchChartType('Gasto')" class="btn btn-primary btn-sm">Gastos</button>
-                                    <button id="btnChartIncome" onclick="switchChartType('Ingreso')" class="btn btn-secondary btn-sm">Ingresos</button>
-                                </div>
-                                <p class="text-muted" style="text-align: center;">Distribución de <span id="chartTitleType">Gastos</span> por categoría.</p>
-                                
-                                <button id="clearChartFilterBtn" onclick="filterTableByCategory(null)" class="btn btn-secondary btn-sm" style="display: none; margin-bottom: 10px;">Limpiar Filtro</button>
-                                <div style="height: 350px; position: relative; margin-top: 20px;"><canvas id="expenseChart"></canvas></div>
-                            </div>
-                        </div>
-
-                        <!-- VISTA HISTORIAL -->
-                        <div id="history-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <h3 style="margin-bottom: 20px;">Historial de Movimientos</h3>
-                                <div style="margin-bottom: 15px;">
-                                    <input type="checkbox" id="filterRecurringHistory" onchange="renderMovements(currentMovements)" style="width: auto; margin-right: 8px;">
-                                    <label for="filterRecurringHistory" style="display: inline; cursor: pointer;">Ver solo gastos recurrentes</label>
-                                </div>
-                                <div class="table-container">
-                                <table>
-                                    <thead>
+                        <div class="bg-white rounded-xl overflow-hidden shadow-sm border border-outline-variant">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left">
+                                    <thead class="bg-surface-container font-label-md text-label-md text-on-surface border-b border-outline-variant">
                                         <tr>
-                                            <th>Fecha</th>
-                                            <th>Categoría</th>
-                                            <th onclick="sortTable('monto')" style="cursor:pointer;">Monto ↕</th>
-                                            <th style="text-align: center;">Acciones</th>
+                                            <th onclick="sortTable('fecha')" class="px-md py-sm cursor-pointer select-none hover:bg-surface-container-high transition-colors">Fecha <span id="sortIconFecha">↕</span></th>
+                                            <th onclick="sortTable('categoria')" class="px-md py-sm cursor-pointer select-none hover:bg-surface-container-high transition-colors">Categoría / Tipo <span id="sortIconCategoria">↕</span></th>
+                                            <th onclick="sortTable('monto')" class="px-md py-sm cursor-pointer select-none hover:bg-surface-container-high transition-colors">Monto <span id="sortIconMonto">↕</span></th>
+                                            <th class="px-md py-sm text-right">Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="movementsTableBody"></tbody>
+                                    <tbody id="movementsTableBody" class="divide-y divide-outline-variant"></tbody>
                                 </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- VISTA ESTADO DE PAGOS (NUEVA) -->
-                        <div id="payments-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <h4>📅 Estado de Pagos Mensuales</h4>
-                                
-                                <!-- NUEVO: Filtro de Mes -->
-                                <div class="form-group" style="margin-bottom: 15px;">
-                                    <label class="form-label">Filtrar por Mes</label>
-                                    <input type="month" id="paymentsMonthFilter" onchange="loadPaymentStatus()" class="form-control">
-                                </div>
-
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--bg-body); padding: 15px; border-radius: 8px;">
-                                     <div>
-                                        <small class="text-muted">Ingreso Base</small>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div id="baseIncomeDisplay" style="font-weight: bold; color: var(--success);">--</div>
-                                            <button onclick="openEditBaseIncomeModal()" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6; padding:0;" title="Editar Ingreso Base">✏️</button>
-                                        </div>
-                                        <!-- Contenedor para el botón de confirmar ingreso o estado -->
-                                        <div id="incomeStatusContainer" style="margin-top: 5px;">
-                                            <!-- Contenido dinámico: botón o texto -->
-                                        </div>
-                                     </div>
-                                </div>
-                                <div id="paymentsListContainer"></div>
-                            </div>
-                        </div>
-
-                        <!-- VISTA METAS DE AHORRO -->
-                        <div id="savings-view" class="dashboard-view" style="display: none;">
-                            <div class="card">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                                    <h4>🎯 Metas de Ahorro</h4>
-                                    <button onclick="openAddSavingsModal()" class="btn btn-primary btn-sm">＋ Nueva Meta</button>
-                                </div>
-                                <!-- --- NUEVO: Contenedor para el precio del dólar --- -->
-                                <div id="dollar-price-container" class="card" style="background: var(--bg-body); padding: 15px; margin-bottom: 20px; display: none; animation: fadeIn 0.5s;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <small class="text-muted">Precio del Dólar (TRM Aprox.)</small>
-                                            <h4 id="dollar-price-display" style="margin: 5px 0;">--</h4>
-                                        </div>
-                                        <button id="btn-fetch-dollar" onclick="fetchDollarPrice()" class="btn btn-secondary btn-sm">Actualizar</button>
-                                    </div>
-                                </div>
-                                <!-- --- FIN NUEVO --- -->
-                                <div id="savingsListContainer"></div>
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
         `;
@@ -340,6 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (localStorage.getItem('darkMode') === 'true') {
         document.body.classList.add('dark-mode');
     }
+    updateDarkModeToggleLabel();
 
     // Cargar Fondo de Pantalla guardado
     loadSavedWallpaper();
@@ -351,7 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // VERIFICAR SESIÓN AL CARGAR (CORRECCIÓN F5)
     // Busca si hay un token guardado en el navegador (localStorage)
-    const storedToken = localStorage.getItem("token");
+    const storedToken = getToken();
     const storedEmail = localStorage.getItem("email");
     // Si hay token y email, muestra el dashboard directamente
     if (storedToken && storedEmail) {
@@ -367,6 +607,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+
+function toggleLoginPassword() {
+    const input = document.getElementById("loginPassword");
+    const button = document.querySelector(".auth-eye");
+    if (!input) return;
+
+    const shouldShow = input.type === "password";
+    input.type = shouldShow ? "text" : "password";
+    if (button) {
+        button.classList.toggle("is-visible", shouldShow);
+        button.setAttribute("aria-label", shouldShow ? "Ocultar contraseña" : "Mostrar contraseña");
+    }
+}
+
+function toggleDashboardMenu(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    document.body.classList.remove('dashboard-menu-open');
+    const logoButton = document.getElementById('dashboardMenuLogo');
+    if (logoButton) logoButton.setAttribute('aria-label', 'Menú de funciones');
+}
+
+function closeDashboardMenu() {
+    document.body.classList.remove('dashboard-menu-open');
+    const logoButton = document.getElementById('dashboardMenuLogo');
+    if (logoButton) logoButton.setAttribute('aria-label', 'Mostrar menú de funciones');
+}
+
 /* ======================
    VISTAS
 ====================== */
@@ -379,6 +650,7 @@ function adjustMainLayout(isDashboard) {
     if (isDashboard) {
         // Al entrar al dashboard, se quita el fondo animado y se usan los colores base.
         document.body.classList.remove('auth-background');
+        document.body.classList.remove('dashboard-menu-open');
         // En el Dashboard: Quitamos las restricciones de ancho y estilo de tarjeta
         // para que ocupe toda la pantalla y se vea bien en PC.
         main.style.maxWidth = "100%";
@@ -387,6 +659,11 @@ function adjustMainLayout(isDashboard) {
         main.style.padding = "0";
         main.style.background = "transparent";
         main.style.borderRadius = "0";
+        main.style.boxShadow = "none";
+        main.style.border = "0";
+        main.style.minHeight = "100vh";
+        main.style.backdropFilter = "none";
+        main.style.webkitBackdropFilter = "none";
         if (header) header.style.display = "none"; // Oculta el header original en el Dashboard
         loadSavedWallpaper(); // Asegurar que el fondo se vea en el dashboard
     } else {
@@ -399,6 +676,11 @@ function adjustMainLayout(isDashboard) {
         main.style.padding = "";
         main.style.background = "";
         main.style.borderRadius = "";
+        main.style.boxShadow = "";
+        main.style.border = "";
+        main.style.minHeight = "";
+        main.style.backdropFilter = "";
+        main.style.webkitBackdropFilter = "";
         if (header) header.style.display = "none"; // Ocultamos también el header original en Login/Registro
         document.body.style.backgroundImage = ""; // Limpiar fondo personalizado en login
     }
@@ -460,49 +742,55 @@ function showInitialProfile() {
 }
 
 // Función para mostrar el Dashboard principal
-function showDashboard(email) {
-    hideAll();
-    
-    const token = localStorage.getItem("token");
-    // 1. CHECK IF PROFILE IS COMPLETE
-    fetch(`${API}/check-initial-profile`, {
-        headers: { "Authorization": "Bearer " + token }
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Error verificando perfil");
-        return res.json();
-    })
-    .then(profileData => {
-        console.log("Perfil check:", profileData); // Depuración
+async function showDashboard(email) {
+    const token = getToken();
+
+    if (!token) {
+        showLogin();
+        return;
+    }
+
+    try {
+        const profileData = await apiFetchJson(`${API}/check-initial-profile`, {
+            headers: { "Authorization": "Bearer " + token }
+        }, 3);
+
+        console.log("Perfil check:", profileData);
+
         if (profileData.needs_profile_info) {
+            hideAll();
             showTerms();
         } else {
-            // 2. VERIFY IF IT NEEDS ONBOARDING
-            fetch(`${API}/check-onboarding`, {
+            const data = await apiFetchJson(`${API}/check-onboarding`, {
                 headers: { "Authorization": "Bearer " + token }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.needs_onboarding) {
-                    startOnboarding();
-                } else {
-                    adjustMainLayout(true);
-                    const view = document.getElementById("dashboard-view");
-                    view.style.display = "block";
-                    triggerFadeAnimation(view);
-                    loadCategories();
-                    loadMovements();
-                    loadPaymentStatus();
-                    loadProfile();
-                    showDashboardView('payments-view');
-                }
-            });
+            }, 3);
+
+            hideAll();
+            if (data.needs_onboarding) {
+                startOnboarding();
+            } else {
+                adjustMainLayout(true);
+                const view = document.getElementById("dashboard-view");
+                view.style.display = "block";
+                triggerFadeAnimation(view);
+                loadCategories();
+                loadMovements();
+                loadPaymentStatus();
+                loadProfile();
+                showDashboardView('payments-view');
+            }
         }
-    }).catch(err => {
+    } catch (err) {
         console.error("Error checking user status:", err);
-        showToast("Error al cargar tu perfil. Intenta iniciar sesión de nuevo.", "error");
-        logout(); // Logout on error to avoid being stuck
-    });
+
+        if (isAuthExpired(err)) {
+            showToast("Tu sesión venció. Ingresa de nuevo.", "error");
+            logout();
+            return;
+        }
+
+        retryDashboardLoad(email, err);
+    }
 }
 
 // Función para mostrar los Términos y Condiciones
@@ -526,6 +814,8 @@ function cancelTerms() {
    CHATBOT INTERACTIVO
 ====================== */
 let isChatInitialized = false; // Bandera para saber si ya cargamos el menú
+let chatHistory = []; // Últimos turnos (usuario/asistente) para dar contexto al LLM
+const CHAT_HISTORY_MAX_TURNS = 8;
 
 function toggleChat() {
     const win = document.getElementById("chatbot-window");
@@ -570,23 +860,30 @@ function processChatMessage(message) {
 
     // 1. Mostrar mensaje del usuario
     appendMessage(message, 'user');
+    showTypingIndicator();
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
+    const historyForRequest = chatHistory.slice(-CHAT_HISTORY_MAX_TURNS);
 
-    // 2. Enviar al backend
+    // 2. Enviar al backend (con el historial reciente para dar contexto al LLM)
     fetch(`${API}/chat`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + token
         },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ message: message, history: historyForRequest })
     })
     .then(res => res.json())
     .then(data => {
+        hideTypingIndicator();
+
         // 3. Mostrar respuesta del bot
         appendMessage(data.response, 'bot');
-        
+        chatHistory.push({ role: "user", text: message });
+        chatHistory.push({ role: "assistant", text: data.response });
+        chatHistory = chatHistory.slice(-CHAT_HISTORY_MAX_TURNS);
+
         // Si la respuesta indica éxito, recargar movimientos
         if (data.response.includes("registrado") || data.response.includes("eliminado")) {
             filterMovements();
@@ -595,8 +892,10 @@ function processChatMessage(message) {
         }
 
         const container = document.getElementById("chat-messages");
-        
-        if (data.options && data.options.length > 0) {
+
+        if (data.pending_action) {
+            renderPendingActionCard(data.pending_action);
+        } else if (data.options && data.options.length > 0) {
             const optionsDiv = document.createElement("div");
             optionsDiv.className = "chat-options";
             data.options.forEach(opt => {
@@ -610,16 +909,116 @@ function processChatMessage(message) {
         } else {
             container.appendChild(renderChatMenuOptions());
         }
-        
+
         container.scrollTop = container.scrollHeight;
     })
     .catch(err => {
+        hideTypingIndicator();
         appendMessage("Error de conexión con el asistente.", 'bot');
         // Mostrar menú incluso si hay error
         const container = document.getElementById("chat-messages");
         container.appendChild(renderChatMenuOptions());
         container.scrollTop = container.scrollHeight;
     });
+}
+
+function showTypingIndicator() {
+    const container = document.getElementById("chat-messages");
+    const div = document.createElement("div");
+    div.className = "message bot";
+    div.id = "chat-typing-indicator";
+    div.innerText = "Escribiendo…";
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const el = document.getElementById("chat-typing-indicator");
+    if (el) el.remove();
+}
+
+// --- Tarjeta de confirmación para gastos/ingresos detectados por el LLM ---
+function renderPendingActionCard(pendingAction) {
+    const container = document.getElementById("chat-messages");
+
+    const formDiv = document.createElement("div");
+    formDiv.className = "chat-form-container";
+    formDiv.style.cssText = "background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 8px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);";
+
+    const esGasto = pendingAction.type === "add_expense";
+
+    formDiv.innerHTML = `
+        <input type="number" id="pendingAmount" placeholder="Monto ($)" class="form-control" style="font-size: 0.9rem; padding: 8px;" value="${pendingAction.monto}">
+        <input type="text" id="pendingCategory" placeholder="Categoría" class="form-control" style="font-size: 0.9rem; padding: 8px;" value="${escapeHtml(pendingAction.categoria)}">
+        <input type="date" id="pendingDate" class="form-control" style="font-size: 0.9rem; padding: 8px;" value="${pendingAction.fecha}">
+        <div style="display:flex; gap:8px; margin-top: 5px;">
+            <button onclick="cancelPendingAction(this)" class="btn btn-secondary btn-sm" style="flex:1;">Cancelar</button>
+            <button onclick="confirmPendingAction(this)" class="btn btn-primary btn-sm" style="flex:1;">Confirmar</button>
+        </div>
+    `;
+    formDiv.dataset.type = pendingAction.type;
+    formDiv.dataset.recurrente = pendingAction.es_recurrente ? "1" : "0";
+
+    container.appendChild(formDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function confirmPendingAction(btnElement) {
+    const card = btnElement.closest(".chat-form-container");
+    const type = card.dataset.type;
+    const amount = document.getElementById("pendingAmount").value;
+    const category = document.getElementById("pendingCategory").value;
+    const date = document.getElementById("pendingDate").value;
+
+    if (!amount || !category || !date) {
+        return showToast("Completa monto, categoría y fecha.", 'error');
+    }
+
+    btnElement.disabled = true;
+    btnElement.innerText = "...";
+
+    const token = getToken();
+    const endpoint = type === "add_income" ? "add-income" : "add-expense";
+    const body = type === "add_income"
+        ? { categoria: category, monto: amount, fecha: date }
+        : { tipo: category, monto: amount, fecha: date, es_recurrente: card.dataset.recurrente === "1" };
+
+    fetch(`${API}/${endpoint}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(() => {
+        card.remove();
+        const etiqueta = type === "add_income" ? "Ingreso" : "Gasto";
+        appendMessage(`✅ ${etiqueta} registrado: $${amount} en ${category}`, 'bot');
+        filterMovements();
+        loadPaymentStatus();
+
+        const chatContainer = document.getElementById("chat-messages");
+        chatContainer.appendChild(renderChatMenuOptions());
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    })
+    .catch(err => {
+        console.error(err);
+        showToast("Error al registrar el movimiento", 'error');
+        btnElement.disabled = false;
+        btnElement.innerText = "Confirmar";
+    });
+}
+
+function cancelPendingAction(btnElement) {
+    const card = btnElement.closest(".chat-form-container");
+    card.remove();
+    appendMessage("Operación cancelada.", 'bot');
+
+    const chatContainer = document.getElementById("chat-messages");
+    chatContainer.appendChild(renderChatMenuOptions());
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 function appendMessage(text, sender) {
@@ -645,7 +1044,7 @@ function renderChatMenu() {
     const container = document.getElementById("chat-messages");
     container.innerHTML = ""; // Limpiar mensajes anteriores (ej. el hardcoded)
 
-    appendMessage("👋 ¡Hola! Soy tu asistente financiero. Selecciona una opción rápida:", 'bot');
+    appendMessage("👋 ¡Hola! Soy tu asistente financiero. Puedes escribirme en lenguaje natural, ej: \"gasté 20000 en transporte hoy\", y yo lo registro por ti (te pediré confirmar antes de guardar). También puedes usar estos accesos rápidos:", 'bot');
 
     const optionsDiv = renderChatMenuOptions();
 
@@ -662,7 +1061,6 @@ function renderChatMenuOptions() {
         { label: "💰 Ver Saldo", command: "Saldo" },
         { label: "🏆 Mayor Gasto", command: "Mayor gasto" },
         { label: "🐷 Ahorrado", command: "Ahorrado" },
-        { label: "💡 Frase", command: "Frase motivacional" },
         { label: "📅 Mis Pagos", command: "Pagos pendientes" },
         { label: "🗑️ Borrar Último", command: "Elimina el último gasto" },
         { label: "⚡ Gasto Rápido", command: "ACTION:QUICK_EXPENSE" }
@@ -695,7 +1093,7 @@ function renderChatMenuOptions() {
 function fetchDollarPrice() {
     const display = document.getElementById("dollar-price-display");
     const button = document.getElementById("btn-fetch-dollar");
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     // 1. Mostrar estado de carga
     if (display) display.innerHTML = `<span class="spinner" style="width:16px; height:16px;"></span>`;
@@ -780,7 +1178,7 @@ function submitQuickExpense(btnElement) {
     btnElement.disabled = true;
     btnElement.innerText = "...";
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     const today = new Date().toISOString().split('T')[0];
 
     fetch(`${API}/add-expense`, {
@@ -830,6 +1228,37 @@ function cancelQuickExpense(btnElement) {
 // Función auxiliar para ocultar TODAS las secciones primero
 function hideAll() {
     document.querySelectorAll("section").forEach(s => s.style.display = "none");
+    hidePostLoginLoader();
+}
+
+/* ======================
+   PANTALLA DE CARGA POST-LOGIN
+====================== */
+const POST_LOGIN_LOADER_MIN_MS = 2000; // Tiempo mínimo visible, aunque el backend responda rápido
+let postLoginLoaderShownAt = 0;
+let postLoginLoaderHideTimer = null;
+
+function showPostLoginLoader() {
+    const el = document.getElementById("post-login-loader");
+    if (!el) return;
+    clearTimeout(postLoginLoaderHideTimer);
+    postLoginLoaderShownAt = Date.now();
+    el.classList.add("active");
+}
+
+function hidePostLoginLoader() {
+    const el = document.getElementById("post-login-loader");
+    if (!el || !el.classList.contains("active")) return;
+
+    const elapsed = Date.now() - postLoginLoaderShownAt;
+    const remaining = POST_LOGIN_LOADER_MIN_MS - elapsed;
+
+    clearTimeout(postLoginLoaderHideTimer);
+    if (remaining > 0) {
+        postLoginLoaderHideTimer = setTimeout(() => el.classList.remove("active"), remaining);
+    } else {
+        el.classList.remove("active");
+    }
 }
 
 // Función auxiliar para reiniciar la animación fade-in
@@ -841,7 +1270,17 @@ function triggerFadeAnimation(element) {
 }
 
 // Función para cambiar entre vistas del dashboard
-function showDashboardView(viewId) {
+function showDashboardView(viewId, preserveSearch = false) {
+    // Al navegar a cualquier vista del menú (salvo que venga de la propia
+    // búsqueda), limpiamos la barra de búsqueda y el filtro que haya dejado
+    // aplicado en la tabla de Historial (aunque el input ya esté vacío).
+    if (!preserveSearch && searchFilterActive) {
+        const searchInput = document.getElementById("globalSearchInput");
+        if (searchInput) searchInput.value = "";
+        renderMovements(currentMovements);
+        searchFilterActive = false;
+    }
+
     // Ocultar todas las vistas del dashboard
     document.querySelectorAll('.dashboard-view').forEach(view => {
         view.style.display = 'none';
@@ -855,10 +1294,12 @@ function showDashboardView(viewId) {
         triggerFadeAnimation(viewToShow);
     }
 
-    // Actualizar colores de los botones de navegación
-    document.querySelectorAll('.nav-buttons .btn').forEach(btn => {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-secondary');
+    // Actualizar colores de los botones de navegación (clases de Tailwind y tema)
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        if (btn.tagName === 'A') {
+            btn.classList.remove('text-secondary-container', 'font-bold', 'bg-white/10');
+            btn.classList.add('text-on-primary-container', 'hover:bg-white/10');
+        }
     });
     
     // Mapeo de viewId a buttonId
@@ -872,9 +1313,9 @@ function showDashboardView(viewId) {
     };
 
     const activeBtn = document.getElementById(buttonIdMap[viewId]);
-    if (activeBtn) {
-        activeBtn.classList.remove('btn-secondary');
-        activeBtn.classList.add('btn-primary');
+    if (activeBtn && activeBtn.tagName === 'A') {
+        activeBtn.classList.remove('text-on-primary-container', 'hover:bg-white/10');
+        activeBtn.classList.add('text-secondary-container', 'font-bold', 'bg-white/10');
     }
 
     // Si la vista es el análisis, redibujar el gráfico para que se ajuste
@@ -891,6 +1332,8 @@ function showDashboardView(viewId) {
         // Se oculta si estamos en la vista de resumen, se muestra en las demás
         miniBalance.style.display = (viewId === 'summary-view') ? 'none' : 'block';
     }
+
+    closeDashboardMenu();
 
     // En móvil, cerrar el menú al seleccionar una opción para mejorar la experiencia
     const navColumn = document.querySelector('.nav-column');
@@ -911,48 +1354,59 @@ function showDashboardView(viewId) {
    LOGIN
 ====================== */
 // Función que se llama al dar clic en "Ingresar"
-function login() {
-    fetch(`${API}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            email: document.getElementById("loginEmail").value,
-            password: document.getElementById("loginPassword").value
-        })
-    })
-    .then(async res => {
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-            return res.json();
-        } else {
-            // Si no es JSON, capturamos el texto (probablemente un error 502 o 404 de Nginx)
-            const errorText = await res.text();
-            console.error("Respuesta no esperada del servidor:", errorText);
-            throw new Error("El backend no está respondiendo JSON. Revisa si el servicio 'fincsdash' está activo.");
-        }
-    })
-    .then(data => {
+async function login() {
+    const loginBtn = document.querySelector("#login-view button[onclick='login()']");
+    const loginMsg = document.getElementById("loginMsg");
+    const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+    const password = document.getElementById("loginPassword").value;
+
+    if (!email || !password) {
+        showToast("Ingresa correo y contraseña.", "error");
+        return;
+    }
+
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerText = "Conectando...";
+    }
+
+    if (loginMsg) {
+        loginMsg.innerText = "";
+        loginMsg.style.color = "";
+    }
+
+    try {
+        const data = await apiFetchJson(`${API}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+        }, 3);
+
         console.log("LOGIN RESPONSE:", data);
 
         if (data.token) {
-            localStorage.setItem("token", data.token);
-            localStorage.setItem("email", document.getElementById("loginEmail").value);
-            showDashboard(document.getElementById("loginEmail").value);
+            const remember = document.getElementById("rememberMe")?.checked ?? true;
+            setToken(data.token, remember);
+            localStorage.setItem("email", email);
+            showPostLoginLoader();
+            showDashboard(email);
         } else {
             showToast(data.message || "Error al iniciar sesión", 'error');
         }
-    })
-    .catch(err => {
+    } catch (err) {
         console.error("LOGIN ERROR:", err);
-        showToast(err.message, 'error');
-        const loginMsg = document.getElementById("loginMsg");
+        const message = err.message || "Error al iniciar sesión. Verifica tu conexión o las credenciales.";
+        showToast(message, err.recoverable ? "info" : "error");
         if (loginMsg) {
-            loginMsg.innerText = err.message || "Error al iniciar sesión. Verifica tu conexión o las credenciales.";
-            loginMsg.style.color = "red";
+            loginMsg.innerText = message;
+            loginMsg.style.color = err.recoverable ? "var(--secondary)" : "red";
         }
-        alert("Error al iniciar sesión"); // Mantenemos el alert para feedback inmediato
-        showToast("Error al iniciar sesión", 'error');
-    });
+    } finally {
+        if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.innerText = "Ingresar";
+        }
+    }
 }
 
 /* ======================
@@ -985,7 +1439,7 @@ function escapeHtml(text) {
 // Función para cargar la lista de ingresos y gastos
 function loadMovements(month = null, year = null) {
     // Obtiene el token guardado
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return; // Si no hay token, no hace nada
 
     // Mostrar spinner en la tabla antes de cargar
@@ -1009,14 +1463,19 @@ function loadMovements(month = null, year = null) {
     }
 
     // Pide los datos al servidor enviando el token de autorización
-    fetch(url, {
+    apiFetchJson(url, {
         headers: { "Authorization": "Bearer " + token }
-    })
-    .then(res => res.json())
+    }, 2)
     .then(data => {
         currentMovements = data; // Guardamos los datos en memoria
+        populateHistoryCategoryFilter(currentMovements);
         renderMovements(currentMovements); // Dibujamos la tabla
         renderChart(currentMovements); // Dibujamos el gráfico
+    })
+    .catch(err => {
+        console.error("Error cargando movimientos:", err);
+        if (isAuthExpired(err)) return logout();
+        showToast(err.message || "No se pudieron cargar los movimientos.", err.recoverable ? "info" : "error");
     });
 }
 
@@ -1026,12 +1485,31 @@ function renderMovements(data) {
     if (!tbody) return;
 
     tbody.innerHTML = ""; // Limpiar tabla actual
-    
+
     // --- FILTRO DE RECURRENTES ---
     const filterCheckbox = document.getElementById("filterRecurringHistory");
     if (filterCheckbox && filterCheckbox.checked) {
         // Filtramos solo los que tengan es_recurrente = 1 (true)
         data = data.filter(m => m.es_recurrente);
+    }
+
+    // --- FILTROS DE HISTORIAL (fecha, categoría, monto) ---
+    const dateFrom = document.getElementById("historyDateFrom")?.value;
+    const dateTo = document.getElementById("historyDateTo")?.value;
+    const categoryFilter = document.getElementById("historyCategoryFilter")?.value;
+    const amountMinRaw = document.getElementById("historyAmountMin")?.value;
+    const amountMaxRaw = document.getElementById("historyAmountMax")?.value;
+    const amountMin = amountMinRaw !== "" && amountMinRaw != null ? parseFloat(amountMinRaw) : null;
+    const amountMax = amountMaxRaw !== "" && amountMaxRaw != null ? parseFloat(amountMaxRaw) : null;
+
+    if (dateFrom) data = data.filter(m => m.fecha >= dateFrom);
+    if (dateTo) data = data.filter(m => m.fecha <= dateTo);
+    if (categoryFilter) data = data.filter(m => m.categoria === categoryFilter);
+    if (amountMin !== null && !isNaN(amountMin)) data = data.filter(m => parseFloat(m.monto) >= amountMin);
+    if (amountMax !== null && !isNaN(amountMax)) data = data.filter(m => parseFloat(m.monto) <= amountMax);
+
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="px-md py-lg text-center text-on-surface-variant font-body-md text-body-md">No hay movimientos que coincidan con los filtros.</td></tr>`;
     }
 
     // Variables para calcular totales
@@ -1052,22 +1530,33 @@ function renderMovements(data) {
 
         // Crea una nueva fila (tr) para la tabla
         const row = document.createElement("tr");
+        row.className = "hover:bg-surface-container-low transition-colors group";
         
         // Define colores: verde para ingreso, rojo para gasto
-        const color = mov.tipo === "Ingreso" ? "green" : "red";
-        const signo = mov.tipo === "Ingreso" ? "+" : "-";
+        const isIngreso = mov.tipo === "Ingreso";
+        const color = isIngreso ? "#006c49" : "#ba1a1a";
+        const signo = isIngreso ? "+" : "-";
         
         // Icono indicador de recurrente
-        const iconRecurrente = mov.es_recurrente ? '<span title="Gasto Recurrente">🔁</span>' : '';
+        const iconRecurrente = mov.es_recurrente 
+            ? '<span class="px-xs py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm border border-outline-variant flex items-center gap-1 select-none">🔁 Recurrente</span>' 
+            : '';
 
         row.innerHTML = `
-            <td>${formattedDate}</td>
-            <td>${escapeHtml(mov.categoria)} ${iconRecurrente}</td>
-            <td style="color: ${color}; font-weight: bold;">
+            <td class="px-md py-md font-numeric-data text-numeric-data text-on-surface-variant">${formattedDate}</td>
+            <td class="px-md py-md">
+                <div class="flex items-center gap-sm">
+                    <span class="font-body-md text-body-md font-bold text-primary">${escapeHtml(mov.categoria)}</span>
+                    ${iconRecurrente}
+                </div>
+            </td>
+            <td class="px-md py-md font-numeric-data text-numeric-data font-bold" style="color: ${color};">
                 ${signo} ${formatCurrency(mov.monto)}
             </td>
-            <td>
-                <button data-type="${escapeHtml(mov.tipo)}" onclick="deleteMovement(${mov.id}, this.dataset.type)" style="color: red; cursor: pointer;">🗑️</button>
+            <td class="px-md py-md text-right">
+                <button data-type="${escapeHtml(mov.tipo)}" onclick="deleteMovement(${mov.id}, this.dataset.type)" class="text-on-surface-variant hover:text-error transition-colors flex items-center justify-center p-1.5 hover:bg-surface-container rounded-full ml-auto" title="Eliminar">
+                    <span class="material-symbols-outlined text-md text-error">delete</span>
+                </button>
             </td>
         `;
         tbody.appendChild(row);
@@ -1080,20 +1569,20 @@ function renderMovements(data) {
     const balanceDisplay = document.getElementById("filteredBalanceDisplay");
     if (balanceDisplay) {
         balanceDisplay.innerText = formatCurrency(balance);
-        balanceDisplay.style.color = balance >= 0 ? "var(--success)" : "var(--danger)";
+        balanceDisplay.style.color = balance >= 0 ? "#006c49" : "#ba1a1a";
     }
 
     // 2. Actualizar Mini Balance del Header (Pequeño)
     const miniBalanceAmount = document.getElementById("miniBalanceAmount");
     if (miniBalanceAmount) {
         miniBalanceAmount.innerText = formatCurrency(balance);
-        miniBalanceAmount.style.color = balance >= 0 ? "var(--success)" : "var(--danger)";
+        miniBalanceAmount.style.color = balance >= 0 ? "#006c49" : "#ba1a1a";
     }
 }
 
 
 function consultarBalance() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     fetch(`${API}/balance`, {
         method: "POST",
@@ -1172,17 +1661,17 @@ function renderChart(data) {
     // --- ADAPTACIÓN A MODO OSCURO ---
     const isDarkMode = document.body.classList.contains('dark-mode');
 
-    // Paletas: Colores normales vs. Colores brillantes/neón para fondo oscuro
+    // Paletas: colores limpios para modo claro y una gama sobria para modo oscuro.
     const paletteLight = ['#e63946', '#f77f00', '#fcbf49', '#003049', '#d62828', '#2a9d8f', '#264653', '#457b9d'];
-    const paletteDark = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#ff924c', '#4cc9f0', '#f72585'];
+    const paletteDark = ['#7dd3b0', '#f2cc8f', '#e07a5f', '#81b29a', '#c3b1e1', '#74c0fc', '#f4a261', '#9ad5ca'];
     
     const palette = isDarkMode ? paletteDark : paletteLight;
-    const incomeColor = isDarkMode ? '#06d6a0' : '#2ec4b6'; // Verde más brillante en oscuro
+    const incomeColor = isDarkMode ? '#7dd3b0' : '#2ec4b6';
     // Usar la paleta de colores también para ingresos para poder discriminarlos
     const bgColors = labels.map((cat, i) => palette[i % palette.length]);
     
     // El borde separa los segmentos: blanco en modo claro, gris oscuro en modo oscuro
-    const borderColors = labels.map(() => isDarkMode ? '#1e1e1e' : '#ffffff');
+    const borderColors = labels.map(() => isDarkMode ? '#101815' : '#ffffff');
 
     // 2. Destruir gráfico anterior si existe (para actualizar)
     if (myChart) {
@@ -1213,11 +1702,16 @@ function renderChart(data) {
                         position: 'bottom',
                         labels: {
                             padding: 20,
-                            color: isDarkMode ? '#e0e0e0' : '#666' // Texto blanco en modo oscuro
+                            color: isDarkMode ? '#a9beb3' : '#666'
                         }
                     },
                     // INTERACTIVIDAD: Filtrar tabla al hacer clic
                     tooltip: {
+                        backgroundColor: isDarkMode ? '#101815' : '#ffffff',
+                        titleColor: isDarkMode ? '#edf7f1' : '#24352f',
+                        bodyColor: isDarkMode ? '#d7e7de' : '#24352f',
+                        borderColor: isDarkMode ? '#31483f' : '#ded6ca',
+                        borderWidth: 1,
                         callbacks: {
                             label: function(context) {
                                 let label = context.label || '';
@@ -1248,18 +1742,63 @@ function renderChart(data) {
 
 // Función para ordenar la tabla al hacer clic en el encabezado
 function sortTable(column) {
-    sortAsc = !sortAsc; // Invertir orden
-    
+    if (currentSortColumn === column) {
+        sortAsc = !sortAsc; // Invertir orden si es la misma columna
+    } else {
+        currentSortColumn = column;
+        sortAsc = true;
+    }
+
     currentMovements.sort((a, b) => {
         // Compara números o textos según la columna
-        let valA = column === 'monto' ? parseFloat(a[column]) : a[column].toString().toLowerCase();
-        let valB = column === 'monto' ? parseFloat(b[column]) : b[column].toString().toLowerCase();
+        let valA = column === 'monto' ? parseFloat(a[column]) : (a[column] || '').toString().toLowerCase();
+        let valB = column === 'monto' ? parseFloat(b[column]) : (b[column] || '').toString().toLowerCase();
 
         if (valA < valB) return sortAsc ? -1 : 1;
         if (valA > valB) return sortAsc ? 1 : -1;
         return 0;
     });
 
+    updateSortIndicators();
+    renderMovements(currentMovements);
+}
+
+// Actualiza las flechas ↑/↓ del encabezado según la columna activa
+function updateSortIndicators() {
+    const icons = { fecha: 'sortIconFecha', categoria: 'sortIconCategoria', monto: 'sortIconMonto' };
+    Object.entries(icons).forEach(([col, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = currentSortColumn === col ? (sortAsc ? '↑' : '↓') : '↕';
+    });
+}
+
+// Llena el select de categorías del Historial con las categorías presentes
+// en los movimientos cargados (preserva la selección actual si sigue existiendo).
+function populateHistoryCategoryFilter(data) {
+    const select = document.getElementById("historyCategoryFilter");
+    if (!select) return;
+
+    const previousValue = select.value;
+    const categories = Array.from(new Set(data.map(m => m.categoria).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+    select.innerHTML = '<option value="">Todas</option>' +
+        categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
+
+    if (categories.includes(previousValue)) {
+        select.value = previousValue;
+    }
+}
+
+// Limpia todos los filtros del Historial (fecha, categoría, monto, recurrentes)
+function clearHistoryFilters() {
+    const ids = ["historyDateFrom", "historyDateTo", "historyCategoryFilter", "historyAmountMin", "historyAmountMax"];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+    const recurringCheckbox = document.getElementById("filterRecurringHistory");
+    if (recurringCheckbox) recurringCheckbox.checked = false;
     renderMovements(currentMovements);
 }
 
@@ -1292,12 +1831,38 @@ function filterMovements() {
     loadMovements(month, year);
 }
 
+// Función para buscar gastos rápidamente por palabra clave (barra superior)
+function searchExpenses() {
+    const input = document.getElementById("globalSearchInput");
+    const query = (input?.value || "").trim().toLowerCase();
+
+    showDashboardView('history-view', true); // preservar el texto buscado en el input
+
+    if (!query) {
+        renderMovements(currentMovements);
+        searchFilterActive = false;
+        return;
+    }
+
+    const results = currentMovements.filter(m =>
+        m.tipo === "Gasto" && m.categoria && m.categoria.toLowerCase().includes(query)
+    );
+    renderMovements(results);
+    searchFilterActive = true;
+    showToast(
+        results.length
+            ? `${results.length} gasto(s) encontrados para "${query}"`
+            : `No se encontraron gastos para "${query}"`,
+        results.length ? 'success' : 'info'
+    );
+}
+
 // Función para borrar un movimiento
 function deleteMovement(id, tipo) {
     // Pregunta confirmación al usuario
     if (!confirm("¿Estás seguro de eliminar este movimiento?")) return;
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     // Determinamos si es gasto o ingreso para llamar al endpoint correcto
     const endpoint = tipo === "Ingreso" ? "/delete-income" : "/delete-expense";
 
@@ -1320,7 +1885,7 @@ function deleteMovement(id, tipo) {
 ====================== */
 // Función para descargar los datos en Excel (CSV)
 function exportToCSV() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     const input = document.getElementById("monthFilter");
@@ -1334,10 +1899,9 @@ function exportToCSV() {
         filename = `movimientos_${year}_${month}.csv`;
     }
 
-    fetch(url, {
+    apiFetchJson(url, {
         headers: { "Authorization": "Bearer " + token }
-    })
-    .then(res => res.json())
+    }, 2)
     .then(data => {
         if (!data || data.length === 0) return alert("No hay datos para exportar");
         if (!data || data.length === 0) return showToast("No hay datos para exportar", 'info');
@@ -1371,7 +1935,7 @@ function exportToCSV() {
 ====================== */
 // Función para descargar reporte en PDF
 function exportToPDF() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     const input = document.getElementById("monthFilter");
@@ -1404,7 +1968,7 @@ function exportToPDF() {
 ====================== */
 // Función para registrar un nuevo gasto
 function addExpense() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     
     // Obtenemos los valores del formulario
     // Asegúrate de que tus inputs en el HTML tengan estos IDs
@@ -1472,10 +2036,11 @@ function addExpense() {
 ====================== */
 // Función para registrar un nuevo ingreso
 function addIncome() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     const monto = document.getElementById("expenseAmount").value;
     const fecha = document.getElementById("expenseDate").value;
     const categoria = document.getElementById("categoriaSelect").value;
+    const isRecurring = document.getElementById("isRecurringInput").checked;
 
     if (!monto || !fecha) {
         return showToast("Completa el Monto y la Fecha", 'error');
@@ -1495,10 +2060,21 @@ function addIncome() {
     })
     .then(res => res.json())
     .then(data => {
-        showToast(data.message, 'success');
         if (data.message.includes("agregado")) {
             document.getElementById("expenseAmount").value = "";
+            document.getElementById("isRecurringInput").checked = false; // Resetear checkbox
             filterMovements(); // Actualizar tabla y gráfico
+
+            // Los ingresos no tienen un mecanismo de "recurrente" propio (a diferencia
+            // de los gastos): el ingreso mensual recurrente se administra desde
+            // Pagos > "Confirmar Ingreso Principal". Avisamos en vez de ignorar el check.
+            if (isRecurring) {
+                showToast('Ingreso agregado. Para marcar tu ingreso principal como recurrente, ve a "Pagos" y usa "Confirmar Ingreso Principal".', 'success');
+            } else {
+                showToast(data.message, 'success');
+            }
+        } else {
+            showToast(data.message, 'success');
         }
     })
     .catch(err => console.error(err));
@@ -1508,9 +2084,10 @@ function addIncome() {
    REGISTRO
 ====================== */
 // Función para crear una cuenta nueva
-function register() {
-    const email = document.getElementById("registerEmail").value;
+async function register() {
+    const email = document.getElementById("registerEmail").value.trim().toLowerCase();
     const password = document.getElementById("registerPassword").value;
+    const registerBtn = document.querySelector("#register-view button[onclick='register()']");
 
     // Limpiar mensajes previos
     const msg = document.getElementById("registerMsg");
@@ -1519,25 +2096,23 @@ function register() {
         msg.style.color = "";
     }
 
-    fetch(`${API}/register`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            email: email,
-            password: password
-        })
-    })
-    .then(res => {
-        // Verificar si la respuesta no es exitosa (ej. 400 Bad Request, 500 Internal Server Error)
-        if (!res.ok) {
-            // Si no es exitosa, parsear el mensaje de error del backend
-            return res.json().then(errData => {
-                throw new Error(errData.message || "Error desconocido en el registro.");
-            });
-        }
-        return res.json(); // Si es exitosa, parsear la respuesta JSON
-    })
-    .then(data => {
+    if (!email || !password) {
+        showToast("Completa correo y contraseña.", "error");
+        return;
+    }
+
+    if (registerBtn) {
+        registerBtn.disabled = true;
+        registerBtn.innerText = "Registrando...";
+    }
+
+    try {
+        const data = await apiFetchJson(`${API}/register`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ email, password })
+        }, 0);
+
         console.log("REGISTER RESPONSE:", data); // Registrar la respuesta completa para depuración
         if(msg) msg.innerText = data.message;
 
@@ -1557,20 +2132,29 @@ function register() {
                 msg.style.color = "red"; // Por ejemplo, si el usuario ya está registrado y verificado
             }
         }
-    })
-    .catch(err => {
+    } catch (err) {
         console.error("REGISTER ERROR:", err); // Registrar cualquier error de red o de parseo
         if (msg) {
             // Si el error es de conexión (común en Render al despertar el server)
-            if (err instanceof TypeError && err.message.includes("Failed to fetch")) {
-                msg.innerText = "Error de conexión. El servidor puede estar iniciándose. Por favor, espera 30 segundos y vuelve a intentarlo.";
+            if (err.recoverable || err instanceof TypeError) {
+                msg.innerText = "El servidor se está reconectando. Tu formulario queda listo para reintentar en unos segundos.";
+                showToast("Servidor en reconexión. Intenta de nuevo en unos segundos.", "info");
             } else {
                 // Para otros errores, muestra el mensaje del backend
                 msg.innerText = err.message || "Error al registrar usuario. Inténtalo de nuevo.";
+                if (msg.innerText.includes("Usuario ya existe")) {
+                    document.getElementById("loginEmail").value = email;
+                    setTimeout(showLogin, 900);
+                }
             }
             msg.style.color = "red";
         }
-    });
+    } finally {
+        if (registerBtn) {
+            registerBtn.disabled = false;
+            registerBtn.innerText = "Registrar";
+        }
+    }
 }
 
 /* ======================
@@ -1675,10 +2259,27 @@ function toggleMenu() {
 function toggleDarkMode() {
     document.body.classList.toggle('dark-mode');
     localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+    updateDarkModeToggleLabel();
+    
+    // Disparar evento para que la animación 3D u otros scripts reaccionen
+    document.dispatchEvent(new Event('themeToggled'));
     
     // Redibujar el gráfico si existen datos para aplicar los nuevos colores inmediatamente
     if (currentMovements.length > 0) {
         renderChart(currentMovements);
+    }
+}
+
+function updateDarkModeToggleLabel() {
+    const button = document.getElementById('darkModeToggleBtn');
+    if (button) {
+        button.textContent = document.body.classList.contains('dark-mode') ? '☀️ Modo Claro' : '🌙 Modo Oscuro';
+    }
+    
+    // Actualizar icono en el login si existe
+    const loginIcon = document.getElementById('loginThemeIcon');
+    if (loginIcon) {
+        loginIcon.textContent = document.body.classList.contains('dark-mode') ? 'light_mode' : 'dark_mode';
     }
 }
 
@@ -1688,8 +2289,11 @@ document.addEventListener('click', function(event) {
     const menuToggle = document.querySelector('.menu-toggle');
     const profileDropdown = document.getElementById('profileDropdown');
     const profileAvatar = document.getElementById('profileAvatar');
+    const alertsDropdown = document.getElementById('alertsDropdown');
+    const alertsBtn = document.getElementById('alertsBtn');
     const chatbotWindow = document.getElementById('chatbot-window');
     const chatbotBtn = document.getElementById('chatbot-btn');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
 
     // Si el menú está abierto, y el clic no fue dentro del menú ni en el botón
     if (navColumn && navColumn.classList.contains('active')) {
@@ -1698,11 +2302,22 @@ document.addEventListener('click', function(event) {
         }
     }
 
+    if (document.body.classList.contains('dashboard-menu-open') && dashboardSidebar) {
+        if (!dashboardSidebar.contains(event.target)) closeDashboardMenu();
+    }
+
     // Cerrar dropdown de perfil si se hace clic fuera
     if (profileDropdown && profileDropdown.classList.contains('active')) {
         if (!profileDropdown.contains(event.target) && !profileAvatar.contains(event.target)) {
             profileDropdown.classList.remove('active');
             profileAvatar.classList.remove('active');
+        }
+    }
+
+    // Cerrar dropdown de alarmas si se hace clic fuera
+    if (alertsDropdown && alertsDropdown.classList.contains('active')) {
+        if (!alertsDropdown.contains(event.target) && (!alertsBtn || !alertsBtn.contains(event.target))) {
+            alertsDropdown.classList.remove('active');
         }
     }
 
@@ -1723,7 +2338,7 @@ document.addEventListener('click', function(event) {
 // Función para cerrar sesión
 function logout() {
     currentUser = null;
-    localStorage.removeItem("token");
+    clearToken();
     localStorage.removeItem("email"); // Borrar email al salir
     showLogin();
 }
@@ -1753,24 +2368,26 @@ window.addEventListener("load", () => {
 
 // Función que maneja la respuesta de Google
 function handleGoogle(response) {
-    fetch(`${API}/google-login`, {
+    apiFetchJson(`${API}/google-login`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ token: response.credential })
-    })
-    .then(res => res.json())
+    }, 2)
     .then(data => {
         // CORRECCIÓN: Verificamos si recibimos el token
         if (data.token) {
-            localStorage.setItem("token", data.token);
+            const remember = document.getElementById("rememberMe")?.checked ?? true;
+            setToken(data.token, remember);
             // Usamos el email que ahora nos devuelve el backend
-            currentUser = data.email; 
+            currentUser = data.email;
             localStorage.setItem("email", currentUser); // Guardar email para F5
+            showPostLoginLoader();
             showDashboard(currentUser);
         } else {
             showToast(data.message || "Error al iniciar sesión con Google", 'error');
         }
-    });
+    })
+    .catch(err => showToast(err.message || "Error al iniciar sesión con Google", err.recoverable ? "info" : "error"));
 }
 
 /* ======================
@@ -1778,16 +2395,12 @@ function handleGoogle(response) {
 ====================== */
 // Función para cargar las categorías disponibles desde el servidor
 function loadCategories() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
-    fetch(`${API}/categories`, {
+    apiFetchJson(`${API}/categories`, {
         headers: { "Authorization": "Bearer " + token }
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Error cargando categorías");
-        return res.json();
-    })
+    }, 2)
     // Llena el menú desplegable (select) con las opciones recibidas
     .then(categorias => {
         if (!Array.isArray(categorias)) return; // Validación para evitar errores si llega un objeto de error
@@ -1802,12 +2415,15 @@ function loadCategories() {
             });
         }
     })
-    .catch(err => console.error("Error categories:", err));
+    .catch(err => {
+        console.error("Error categories:", err);
+        if (!err.recoverable) showToast(err.message || "Error cargando categorías", "error");
+    });
 }
 
 // Función para crear una nueva categoría personalizada
 function addCategory() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     const input = document.getElementById("newCategoryInput");
     const nombre = input ? input.value : "";
 
@@ -1831,7 +2447,6 @@ function addCategory() {
         return res.json();
     })
     .then(data => {
-        alert(data.message);
         showToast(data.message, data.message === "Categoría agregada" ? 'success' : 'info');
         if (data.message === "Categoría agregada") {
             input.value = "";
@@ -1865,24 +2480,20 @@ function saveInitialProfile() {
     const nombre = document.getElementById("profileNombre").value;
     const apellidos = document.getElementById("profileApellidos").value;
     const edad = document.getElementById("profileEdad").value;
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!nombre || !apellidos || !edad) {
         return showToast("Por favor, completa todos los campos.", "error");
     }
 
-    fetch(`${API}/save-initial-profile`, {
+    apiFetchJson(`${API}/save-initial-profile`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + token
         },
         body: JSON.stringify({ nombre, apellidos, edad })
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Error al guardar el perfil.");
-        return res.json();
-    })
+    }, 1)
     .then(data => {
         showToast(data.message, "success");
         // Profile saved, now check for onboarding
@@ -2202,8 +2813,8 @@ function finishOnboarding() {
         return;
     }
 
-    const token = localStorage.getItem("token");
-    fetch(`${API}/save-onboarding`, {
+    const token = getToken();
+    apiFetchJson(`${API}/save-onboarding`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -2214,10 +2825,13 @@ function finishOnboarding() {
             dia_pago: payDay,
             gastos_fijos: expenses
         })
-    })
-    .then(res => res.json())
+    }, 1)
     .then(data => {
         nextOnboardingStep(3); // Mostrar éxito
+    })
+    .catch(err => {
+        console.error("Error guardando onboarding:", err);
+        showToast(err.message || "No se pudo guardar la configuración inicial.", err.recoverable ? "info" : "error");
     });
 }
 
@@ -2230,7 +2844,7 @@ function completeOnboarding() {
    ESTADO DE PAGOS
 ====================== */
 function loadPaymentStatus() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     
     // --- NUEVO: Manejo del filtro ---
     const filterInput = document.getElementById("paymentsMonthFilter");
@@ -2317,88 +2931,146 @@ function loadPaymentStatus() {
         if (selectedMonthStr < currentMonthStr) monthState = 'past';
         else if (selectedMonthStr > currentMonthStr) monthState = 'future';
 
+        const overduePayments = []; // Para el menú de alarmas (🔔)
+
         data.pagos.forEach(pago => {
             const div = document.createElement("div");
-            div.className = "card"; // Usamos la base de la tarjeta
-            div.style.padding = "15px";
-            div.style.marginBottom = "10px";
-            div.style.transition = "transform 0.2s ease, box-shadow 0.2s ease";
-
+            
             let daysLeft = pago.dia_limite - currentDay;
 
-            // --- Definir Estado, Icono y Color ---
-            let statusIcon, statusText, statusColor;
+            // --- Definir Estado, Icono, Clases y Color ---
+            let statusIcon, statusText, statusColor, textColorClass;
             if (pago.pagado) {
-                statusIcon = '✅';
+                statusIcon = 'check_circle';
                 statusText = 'Pagado';
-                statusColor = 'var(--success)';
+                statusColor = '#006c49'; // secondary color
+                textColorClass = 'text-secondary';
             } else {
                 if (monthState === 'past') {
                     // Si es mes pasado y no pagó -> Vencido
-                    statusIcon = '⚠️';
+                    statusIcon = 'warning';
                     statusText = 'No pagado (Vencido)';
-                    statusColor = 'var(--danger)';
+                    statusColor = '#ba1a1a'; // error color
+                    textColorClass = 'text-error';
+                    overduePayments.push({ categoria: pago.categoria, monto: pago.monto_esperado, detalle: 'No pagado (mes anterior)' });
                 } else if (monthState === 'future') {
                     // Si es mes futuro -> Pendiente normal
-                    statusIcon = '⏳';
+                    statusIcon = 'pending';
                     statusText = `Vence el día ${pago.dia_limite}`;
-                    statusColor = 'var(--primary)';
+                    statusColor = '#131b2e'; // primary-container color
+                    textColorClass = 'text-primary-container';
                 } else {
                     // Mes actual (Lógica original)
                     if (daysLeft < 0) {
-                        statusIcon = '⚠️';
+                        statusIcon = 'warning';
                         statusText = `Vencido hace ${Math.abs(daysLeft)} días`;
-                        statusColor = 'var(--danger)';
+                        statusColor = '#ba1a1a';
+                        textColorClass = 'text-error';
+                        overduePayments.push({ categoria: pago.categoria, monto: pago.monto_esperado, detalle: `Vencido hace ${Math.abs(daysLeft)} día${Math.abs(daysLeft) === 1 ? '' : 's'}` });
                     } else if (daysLeft === 0) {
-                        statusIcon = '❗';
+                        statusIcon = 'error';
                         statusText = 'Vence Hoy';
-                        statusColor = 'orange';
+                        statusColor = '#e65100'; // orange
+                        textColorClass = 'text-orange-600';
                     } else {
-                        statusIcon = '⏳';
+                        statusIcon = 'pending';
                         statusText = `Faltan ${daysLeft} días`;
-                        statusColor = 'var(--primary)';
+                        statusColor = '#131b2e';
+                        textColorClass = 'text-primary-container';
                     }
                 }
             }
 
-            // Aplicar borde de color
+            div.className = "flex items-center justify-between p-md rounded-xl bg-white border border-outline-variant shadow-sm hover:shadow-md transition-all duration-200 group";
             div.style.borderLeft = `4px solid ${statusColor}`;
 
-            // --- Construir HTML Interno con un diseño de Grid ---
             div.innerHTML = `
-                <div style="display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 15px; width: 100%;">
-                    <!-- Icono de Estado -->
-                    <div style="font-size: 24px;">${statusIcon}</div>
-                    
-                    <!-- Info Principal -->
-                    <div>
-                        <div style="font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                            <span>${escapeHtml(pago.categoria)}</span>
-                            <button data-cat="${escapeHtml(pago.categoria)}" onclick="openEditModal(${pago.id}, this.dataset.cat, ${pago.monto_esperado}, ${pago.dia_limite})" style="background:none; border:none; cursor:pointer; font-size:0.9rem; opacity:0.6; padding:0;">✏️</button>
-                        </div>
-                        <div style="font-size: 0.9rem; color: ${statusColor}; font-weight: 500;">${statusText}</div>
+                <div class="flex items-center gap-sm">
+                    <div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center border border-outline-variant">
+                        <span class="material-symbols-outlined text-primary-container font-bold">${statusIcon}</span>
                     </div>
-                    
-                    <!-- Monto y Acción -->
-                    <div style="text-align: right;">
-                        <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 5px;">${formatCurrency(pago.monto_esperado)}</div>
+                    <div>
+                        <div class="flex items-center gap-xs">
+                            <p class="font-body-md text-body-md font-bold text-primary">${escapeHtml(pago.categoria)}</p>
+                            <button data-cat="${escapeHtml(pago.categoria)}" onclick="openEditModal(${pago.id}, this.dataset.cat, ${pago.monto_esperado}, ${pago.dia_limite})" class="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center p-1 rounded-full hover:bg-surface-container" title="Editar">
+                                <span class="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                        </div>
+                        <p class="font-label-sm text-label-sm mt-0.5 ${textColorClass} font-semibold">${statusText}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-md">
+                    <div class="text-right">
+                        <p class="font-numeric-data text-numeric-data text-primary text-lg font-bold">${formatCurrency(pago.monto_esperado)}</p>
                         ${!pago.pagado 
-                            ? `<button onclick="quickPay('${escapeHtml(pago.categoria)}', ${pago.monto_esperado})" class="btn btn-sm btn-success">Pagar</button>` 
-                            : `<div style="font-size: 0.8rem; color: var(--text-muted);">Día de pago: ${pago.dia_limite}</div>`
+                            ? `<button onclick="quickPay('${escapeHtml(pago.categoria)}', ${pago.monto_esperado})" class="bg-primary text-on-primary font-label-sm text-label-sm px-md py-1.5 rounded-lg hover:opacity-90 transition-all shadow-sm mt-1">Pagar</button>` 
+                            : `<span class="inline-flex items-center px-sm py-1 rounded bg-secondary-container text-on-secondary-container font-label-sm text-label-sm border border-outline-variant mt-1 font-semibold">Pagado</span>`
                         }
                     </div>
                 </div>
             `;
             container.appendChild(div);
         });
+
+        // Solo actualizamos el menú de alarmas (🔔) cuando los datos corresponden
+        // al mes actual real; si el usuario está viendo otro mes, no lo tocamos.
+        if (isCurrentMonth) updateOverdueAlerts(overduePayments);
+    })
+    .catch(err => {
+        console.error("Error cargando pagos:", err);
+        if (isAuthExpired(err)) return logout();
+        showToast(err.message || "No se pudo cargar el estado de pagos.", err.recoverable ? "info" : "error");
     });
+}
+
+/* ======================
+   ALARMAS (Pagos vencidos)
+====================== */
+function updateOverdueAlerts(overduePayments) {
+    const badge = document.getElementById("alertsBadge");
+    const list = document.getElementById("alertsList");
+    if (!badge || !list) return;
+
+    if (overduePayments.length > 0) {
+        badge.textContent = overduePayments.length > 9 ? "9+" : String(overduePayments.length);
+        badge.style.display = "flex";
+    } else {
+        badge.style.display = "none";
+    }
+
+    if (overduePayments.length === 0) {
+        list.innerHTML = `<div class="alert-item-empty">✅ No tienes pagos vencidos.</div>`;
+        return;
+    }
+
+    list.innerHTML = overduePayments.map(p => `
+        <div class="alert-item">
+            <div>
+                <div class="font-body-md text-body-md font-bold text-primary">${escapeHtml(p.categoria)}</div>
+                <div class="font-label-sm text-label-sm text-error">${escapeHtml(p.detalle)}</div>
+            </div>
+            <div class="font-numeric-data text-numeric-data font-bold text-primary">${formatCurrency(p.monto)}</div>
+        </div>
+    `).join('');
+}
+
+function toggleAlertsMenu(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById("alertsDropdown");
+    if (dropdown) dropdown.classList.toggle("active");
+    const profileDropdown = document.getElementById("profileDropdown");
+    const profileAvatar = document.getElementById("profileAvatar");
+    if (profileDropdown && profileDropdown.classList.contains("active")) {
+        profileDropdown.classList.remove("active");
+        if (profileAvatar) profileAvatar.classList.remove("active");
+    }
 }
 
 function quickPay(categoria, monto) {
     // 1. Confirmación de seguridad
     if (!confirm(`¿Confirmar pago de ${formatCurrency(monto)} para ${categoria}?`)) return;
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     // 2. Obtener fecha de hoy (YYYY-MM-DD)
     const today = new Date().toISOString().split('T')[0];
 
@@ -2428,7 +3100,7 @@ function quickPay(categoria, monto) {
 function confirmMainIncome() {
     if (!confirm("¿Confirmas que has recibido tu ingreso principal de este mes? Esto registrará un nuevo movimiento de ingreso.")) return;
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     fetch(`${API}/confirm-main-income`, {
         method: "POST",
         headers: {
@@ -2555,7 +3227,7 @@ function saveRecurringEdit() {
     const id = document.getElementById("editRecId").value;
     const monto = document.getElementById("editRecAmount").value;
     const dia = document.getElementById("editRecDay").value;
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     fetch(`${API}/edit-recurring-expense/${id}`, {
         method: "PUT",
@@ -2577,7 +3249,7 @@ function deleteRecurringExpense() {
     const id = document.getElementById("editRecId").value;
     if (!confirm("¿Estás seguro de que quieres eliminar este pago recurrente?")) return;
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     fetch(`${API}/delete-recurring-expense/${id}`, {
         method: "DELETE",
         headers: {
@@ -2603,7 +3275,7 @@ function toggleProfileMenu() {
 }
 
 function loadProfile() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     fetch(`${API}/get-profile`, {
         headers: { "Authorization": "Bearer " + token }
     })
@@ -2645,7 +3317,7 @@ function loadProfile() {
 }
 
 function openEditProfileModal() {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     // Obtener datos actuales para llenar el formulario
     fetch(`${API}/get-profile`, { headers: { "Authorization": "Bearer " + token } })
     .then(res => res.json())
@@ -2659,7 +3331,7 @@ function openEditProfileModal() {
 function saveProfileUpdate() {
     const nombre = document.getElementById("editProfileName").value;
     const password = document.getElementById("editProfilePassword").value;
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     const body = { nombre: nombre };
     if (password) body.password = password;
@@ -2690,7 +3362,7 @@ function uploadProfilePhoto() {
         const reader = new FileReader();
         reader.onload = function(e) {
             const base64Image = e.target.result;
-            const token = localStorage.getItem("token");
+            const token = getToken();
 
             fetch(`${API}/update-photo`, {
                 method: "POST",
@@ -2713,7 +3385,7 @@ function uploadProfilePhoto() {
 function removeProfilePhoto() {
     if (!confirm("¿Quieres eliminar tu foto de perfil?")) return;
     
-    const token = localStorage.getItem("token");
+    const token = getToken();
     fetch(`${API}/delete-photo`, {
         method: "DELETE",
         headers: {
@@ -2813,7 +3485,7 @@ function loadSavedWallpaper() {
     // Solo aplicar si estamos en el dashboard (no en login)
     const dashboard = document.getElementById("dashboard-view");
     // Verificamos si el dashboard está visible o si hay un usuario logueado
-    const token = localStorage.getItem("token");
+    const token = getToken();
     
     if (token) {
         const savedId = localStorage.getItem("dashboardWallpaperId");
@@ -2879,7 +3551,7 @@ function saveBaseIncome() {
         return showToast("Por favor, ingresa un monto válido.", "error");
     }
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     fetch(`${API}/update-base-income`, {
         method: "PUT",
@@ -2909,11 +3581,10 @@ function saveBaseIncome() {
    METAS DE AHORRO
 ====================== */
 function loadSavingsGoals() {
-    const token = localStorage.getItem("token");
-    fetch(`${API}/savings-goals`, {
+    const token = getToken();
+    apiFetchJson(`${API}/savings-goals`, {
         headers: { "Authorization": "Bearer " + token }
-    })
-    .then(res => res.json())
+    }, 2)
     .then(data => {
         const container = document.getElementById("savingsListContainer");
         container.innerHTML = "";
@@ -2927,30 +3598,38 @@ function loadSavingsGoals() {
             const porcentaje = Math.min(100, Math.round((meta.actual / meta.objetivo) * 100));
             
             const div = document.createElement("div");
-            div.className = "card";
-            div.style.padding = "20px";
-            div.style.marginBottom = "15px";
-            div.style.border = "1px solid var(--border-color)";
+            div.className = "bg-white p-md rounded-xl shadow-sm border border-outline-variant flex flex-col justify-between";
             
             div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0;">${escapeHtml(meta.nombre)}</h4>
-                    <button onclick="deleteSavingsGoal(${meta.id})" style="background:none; border:none; cursor:pointer; color:var(--danger);">🗑️</button>
+                <div>
+                    <div class="flex justify-between items-center mb-sm">
+                        <h4 class="font-headline-md text-headline-md text-primary font-bold">${escapeHtml(meta.nombre)}</h4>
+                        <button onclick="deleteSavingsGoal(${meta.id})" class="text-on-surface-variant hover:text-error transition-colors flex items-center justify-center p-1.5 hover:bg-surface-container rounded-full" title="Eliminar">
+                            <span class="material-symbols-outlined text-md text-error">delete</span>
+                        </button>
+                    </div>
+                    <div class="flex justify-between font-label-sm text-label-sm text-on-surface-variant mb-xs">
+                        <span class="font-numeric-data">${formatCurrency(meta.actual)} / ${formatCurrency(meta.objetivo)}</span>
+                        <span class="font-semibold text-primary">${porcentaje}%</span>
+                    </div>
+                    <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden mb-md">
+                        <div class="h-full bg-secondary rounded-full" style="width: ${porcentaje}%"></div>
+                    </div>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:var(--text-muted);">
-                    <span>${formatCurrency(meta.actual)} / ${formatCurrency(meta.objetivo)}</span>
-                    <span>${porcentaje}%</span>
-                </div>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: ${porcentaje}%"></div>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <small class="text-muted">Meta: ${meta.fecha}</small>
-                    <button data-name="${escapeHtml(meta.nombre)}" onclick="openUpdateSavingsModal(${meta.id}, this.dataset.name, ${meta.actual})" class="btn btn-sm btn-success">＋ Agregar $</button>
+                <div class="flex justify-between items-center mt-auto border-t border-outline-variant pt-sm">
+                    <small class="font-label-sm text-label-sm text-on-surface-variant">Vence: ${meta.fecha}</small>
+                    <button data-name="${escapeHtml(meta.nombre)}" onclick="openUpdateSavingsModal(${meta.id}, this.dataset.name, ${meta.actual})" class="bg-primary text-on-primary font-label-sm text-label-sm px-md py-1.5 rounded-lg hover:opacity-90 transition-opacity shadow-sm font-bold">
+                        ＋ Agregar
+                    </button>
                 </div>
             `;
             container.appendChild(div);
         });
+    })
+    .catch(err => {
+        console.error("Error cargando ahorros:", err);
+        if (isAuthExpired(err)) return logout();
+        showToast(err.message || "No se pudieron cargar las metas de ahorro.", err.recoverable ? "info" : "error");
     });
 }
 
@@ -2968,7 +3647,7 @@ function saveSavingsGoal() {
     const fecha = document.getElementById("newSavingsDate").value;
     const isUSD = document.getElementById("isUsdGoal").checked;
     const moneda = isUSD ? 'USD' : 'COP';
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!nombre || !objetivo || !fecha) return showToast("Completa todos los campos", "error");
 
@@ -3018,7 +3697,7 @@ function saveSavingsUpdate() {
     const current = parseFloat(document.getElementById("updateSavingsCurrent").value);
     const toAdd = parseFloat(document.getElementById("addSavingsAmount").value);
     const deduct = document.getElementById("deductFromBalance").checked; // Obtener valor del checkbox
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (isNaN(toAdd) || toAdd <= 0) return showToast("Ingresa un monto válido", "error");
 
@@ -3050,7 +3729,7 @@ function saveSavingsUpdate() {
 
 function deleteSavingsGoal(id) {
     if (!confirm("¿Eliminar esta meta? Si tiene fondos, se devolverán a tu saldo.")) return;
-    const token = localStorage.getItem("token");
+    const token = getToken();
     fetch(`${API}/delete-savings-goal/${id}`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } })
     .then(res => res.json())
     .then(data => {
@@ -3089,7 +3768,7 @@ function runBot() {
         botButton.innerHTML = `<span class="spinner" style="width:16px; height:16px; vertical-align: middle; margin-right: 8px;"></span> Ejecutando...`;
     }
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     // 2. Llamada al backend
     fetch(`${API}/run-bot`, {
